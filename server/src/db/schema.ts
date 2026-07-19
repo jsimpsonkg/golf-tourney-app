@@ -14,6 +14,7 @@ export const tournaments = pgTable("tournaments", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	name: text("name").notNull(),
 	start_date: timestamp("start_date", { withTimezone: true }),
+	image_url: text("image_url"), // e.g. '/images/dolphins.jpg' served from client/public
 	format: text("format"), // e.g. 'rydercup', 'strokeplay'
 	settings: jsonb("settings").default({}),
 	created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

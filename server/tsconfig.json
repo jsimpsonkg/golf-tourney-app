@@ -41,5 +41,10 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
+
+    //"baseUrl": ".",
+    "paths": {
+      "@services/*": ["./src/services/*"]
+    }
   }
 }

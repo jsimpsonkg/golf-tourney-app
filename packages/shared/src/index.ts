@@ -13,6 +13,7 @@ export interface Tournament {
 	id: string;
 	name: string;
 	start_date: string | null; // ISO timestamp
+	image_url: string | null; // path or URL for the tournament's card image
 	format: string | null; // e.g. 'rydercup', 'strokeplay'
 	settings: Record<string, unknown>;
 	created_at: string;
