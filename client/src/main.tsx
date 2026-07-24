@@ -9,6 +9,7 @@ import Tournament from "./pages/Tournament.tsx";
 import RoundLeaderboard from "./pages/RoundLeaderboard.tsx";
 import TeamPage from "./pages/TeamPage.tsx";
 import ViewScores from "./pages/ViewScores.tsx";
+import TeamScores from "./pages/TeamScores.tsx";
 import EnterScores from "./pages/EnterScores.tsx";
 
 createRoot(document.getElementById('root')!).render(
@@ -21,6 +22,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/tournaments/:id/leaderboard" element={<RoundLeaderboard />} />
           <Route path="/tournaments/:id/teams/:teamId" element={<TeamPage />} />
           <Route path="/matches/:matchId" element={<ViewScores />} />
+          <Route path="/matches/:matchId/teams/:teamIndex" element={<TeamScores />} />
           <Route path="/matches/:matchId/enter" element={<EnterScores />} />
         </Route>
       </Routes>
