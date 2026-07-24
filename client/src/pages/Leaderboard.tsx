@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import './App.css'
-import TournamentGrid from './components/TournamentGrid/TournamentGrid'
-import type { TournamentCardProps } from './components/TournamentCard';
+import TournamentGrid from '../components/TournamentGrid/TournamentGrid'
+import type { TournamentCardProps } from '../components/TournamentCard';
 import type { Tournament as ApiTournement } from '@golf/shared';
 
 function App() {

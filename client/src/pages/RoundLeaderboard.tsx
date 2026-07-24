@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import type { MatchState } from "@golf/shared";
 import { Tabs } from "../components/Tabs";
 
@@ -118,12 +119,19 @@ const stateLabels: Record<MatchState, string> = {
 };
 
 const RoundLeaderboard = () => {
+  const { id } = useParams<{ id: string }>();
   const [activeRoundId, setActiveRoundId] = useState(ROUNDS[0].id);
   const round = ROUNDS.find((r) => r.id === activeRoundId) ?? ROUNDS[0];
 
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4">
+        <Link
+          to={`/tournaments/${id}`}
+          className="text-sm font-semibold text-fairway-600 hover:text-fairway-700"
+        >
+          ← Standings
+        </Link>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-3xl font-extrabold tracking-tight text-fairway-800">
             Leaderboard
@@ -147,10 +155,11 @@ const RoundLeaderboard = () => {
 
       <ul className="flex flex-col gap-3">
         {round.matches.map((match) => (
-          <li
-            key={match.matchId}
-            className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-fairway-900/5"
-          >
+          <li key={match.matchId}>
+           <Link
+            to={`/matches/${match.matchId}`}
+            className="block rounded-xl bg-white p-4 shadow-sm ring-1 ring-fairway-900/5 transition hover:-translate-y-0.5 hover:shadow-md"
+           >
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-medium text-ink-muted">
                 Match {match.matchNumber}
@@ -185,6 +194,7 @@ const RoundLeaderboard = () => {
                 {match.players.B.join(" / ")}
               </span>
             </div>
+           </Link>
           </li>
         ))}
       </ul>

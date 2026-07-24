@@ -4,9 +4,12 @@ import './index.css'
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Layout from "./components/Layout/Layout.tsx";
-import Home from "./App.tsx";
+import Home from "./pages/Leaderboard.tsx";
 import Tournament from "./pages/Tournament.tsx";
 import RoundLeaderboard from "./pages/RoundLeaderboard.tsx";
+import TeamPage from "./pages/TeamPage.tsx";
+import ViewScores from "./pages/ViewScores.tsx";
+import EnterScores from "./pages/EnterScores.tsx";
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -16,6 +19,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<Home />} />
           <Route path="/tournaments/:id" element={<Tournament />} />
           <Route path="/tournaments/:id/leaderboard" element={<RoundLeaderboard />} />
+          <Route path="/tournaments/:id/teams/:teamId" element={<TeamPage />} />
+          <Route path="/matches/:matchId" element={<ViewScores />} />
+          <Route path="/matches/:matchId/enter" element={<EnterScores />} />
         </Route>
       </Routes>
     </BrowserRouter>
