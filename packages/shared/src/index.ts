@@ -58,17 +58,25 @@ export interface MatchParticipant {
 	team_id: string;
 }
 
+export interface Course {
+	id: string;
+	name: string;
+}
+
 export interface CourseHole {
 	id: string;
 	tournament_id: string;
+	course_id: string;
 	hole_number: number;
 	par: number;
 	stroke_index: number | null;
+	yardage: number | null;
 }
 
 export interface ScoreEntry {
 	id: string;
-	player_id: string;
+	player_id: string | null;
+	team_id: string | null;
 	match_id: string | null;
 	hole_number: number;
 	strokes: number;

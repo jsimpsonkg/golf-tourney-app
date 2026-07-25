@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { Handler } from "express";
 import { db } from "../db/index";
 import {
@@ -81,6 +81,7 @@ const toParticipant = (r: Row<typeof match_participants>): MatchParticipant => (
 const toScoreEntry = (r: Row<typeof score_entries>): ScoreEntry => ({
 	id: r.id,
 	player_id: r.player_id,
+	team_id: r.team_id,
 	match_id: r.match_id,
 	hole_number: r.hole_number,
 	strokes: r.strokes,
@@ -180,9 +181,10 @@ export const getTournamentById: Handler = async (req, res) => {
 	}
 };
 
-/** POST /api/matches/:id/scores — record (or correct) a player's score for a
- *  hole. Upserts on the (player, match, hole) unique index so re-entry from the
- *  course overwrites cleanly. */
+/** POST /api/matches/:id/scores — record (or correct) a score for a hole.
+ *  A score belongs to *either* a player (singles/four-ball) or a team/side
+ *  (scramble/foursomes) — never both. Upserts on the matching partial unique
+ *  index so re-entry from the course overwrites cleanly. */
 export const createMatchScore: Handler = async (req, res) => {
 	try {
 		const matchId = req.params.id;
@@ -190,30 +192,56 @@ export const createMatchScore: Handler = async (req, res) => {
 			res.status(400).json({ error: "Invalid match id" });
 			return;
 		}
-		const { player_id, hole_number, strokes } = req.body ?? {};
+		const { player_id, team_id, hole_number, strokes } = req.body ?? {};
 
-		if (
-			typeof player_id !== "string" ||
-			typeof hole_number !== "number" ||
-			typeof strokes !== "number"
-		) {
+		if (typeof hole_number !== "number" || typeof strokes !== "number") {
 			res.status(400).json({
-				error: "player_id (string), hole_number (number), strokes (number) are required",
+				error: "hole_number (number) and strokes (number) are required",
 			});
 			return;
 		}
 
+		// Exactly one of player_id / team_id must be present (mirrors the DB XOR
+		// check + partial unique indexes). Pick the matching conflict target.
+		const hasPlayer = typeof player_id === "string";
+		const hasTeam = typeof team_id === "string";
+		if (hasPlayer === hasTeam) {
+			res.status(400).json({
+				error: "exactly one of player_id or team_id (string) is required",
+			});
+			return;
+		}
+
+		const conflict = hasPlayer
+			? {
+					target: [
+						score_entries.player_id,
+						score_entries.match_id,
+						score_entries.hole_number,
+					],
+					targetWhere: sql`${score_entries.player_id} IS NOT NULL`,
+					set: { strokes },
+				}
+			: {
+					target: [
+						score_entries.team_id,
+						score_entries.match_id,
+						score_entries.hole_number,
+					],
+					targetWhere: sql`${score_entries.team_id} IS NOT NULL`,
+					set: { strokes },
+				};
+
 		const [row] = await db
 			.insert(score_entries)
-			.values({ player_id, match_id: matchId, hole_number, strokes })
-			.onConflictDoUpdate({
-				target: [
-					score_entries.player_id,
-					score_entries.match_id,
-					score_entries.hole_number,
-				],
-				set: { strokes },
+			.values({
+				player_id: hasPlayer ? player_id : null,
+				team_id: hasTeam ? team_id : null,
+				match_id: matchId,
+				hole_number,
+				strokes,
 			})
+			.onConflictDoUpdate(conflict)
 			.returning();
 
 		if (!row) {
