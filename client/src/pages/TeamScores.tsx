@@ -1,24 +1,70 @@
+import type { MatchScorecard, ScorecardSide } from "@golf/shared";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  BACK,
-  FRONT,
-  PARS,
-  getRound,
-  relToPar,
-  sumAt,
-} from "../data/scorecard";
+import { useEffect, useState } from "react";
+import { sumAt, relToPar } from "../utils/scorecardUtils";
 
 const TeamScores = () => {
-  const { matchId, teamIndex } = useParams<{ matchId: string; teamIndex: string }>();
+  const apiUrl = import.meta.env.VITE_API_URL;
+  const { matchId, teamIndex } = useParams<{
+    matchId: string;
+    teamIndex: string;
+  }>();
   const navigate = useNavigate();
-  const round = getRound(matchId);
   const idx = Number(teamIndex) === 1 ? 1 : 0;
-  const team = round.players[idx];
+
+  const [card, setCard] = useState<MatchScorecard>();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadData() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`${apiUrl}/api/matches/${matchId}/scores`);
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}`);
+        }
+        setCard((await response.json()) as MatchScorecard);
+      } catch (err) {
+        console.error(err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load scorecard",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, [apiUrl, matchId]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
+        Loading scorecard...
+      </div>
+    );
+  }
+
+  const side: ScorecardSide | undefined = card?.sides[idx];
+  if (error || !card || !side) {
+    return (
+      <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
+        {error ?? "Scorecard not found. Try going back to the home page."}
+      </div>
+    );
+  }
+
+  const { pars } = card;
+  const FRONT = pars.map((_, i) => i).slice(0, 9);
+  const BACK = pars.map((_, i) => i).slice(9);
+  const matchLabel =
+    card.match_number != null ? `Match ${card.match_number}` : "";
 
   const scoreCell = (i: number) => {
-    const s = team.strokes[i];
-    const par = PARS[i];
-    if (s === null) return <span className="text-ink-muted">–</span>;
+    const s = side.strokes[i];
+    const par = pars[i];
+    if (s == null) return <span className="text-ink-muted">–</span>;
     return (
       <span
         className={`inline-flex h-8 w-8 items-center justify-center ${
@@ -40,7 +86,7 @@ const TeamScores = () => {
       className="grid grid-cols-3 items-center border-t border-fairway-100 px-4 py-2.5"
     >
       <span className="text-left font-medium text-ink">Hole {i + 1}</span>
-      <span className="text-center text-ink-muted">{PARS[i]}</span>
+      <span className="text-center text-ink-muted">{pars[i]}</span>
       <span className="flex justify-end">{scoreCell(i)}</span>
     </div>
   );
@@ -54,8 +100,10 @@ const TeamScores = () => {
       }`}
     >
       <span className="text-left uppercase tracking-wide">{label}</span>
-      <span className="text-center">{sumAt(PARS, holes)}</span>
-      <span className="text-right tabular-nums">{sumAt(team.strokes, holes)}</span>
+      <span className="text-center">{sumAt(pars, holes)}</span>
+      <span className="text-right tabular-nums">
+        {sumAt(side.strokes, holes)}
+      </span>
     </div>
   );
 
@@ -71,7 +119,7 @@ const TeamScores = () => {
 
       <header className="text-center">
         <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-fairway-800">
-          {team.name.split(" / ").map((part, i, arr) => (
+          {side.players.map((part, i, arr) => (
             <span key={i}>
               {part}
               {i < arr.length - 1 ? " / " : ""}
@@ -79,9 +127,10 @@ const TeamScores = () => {
           ))}
         </h1>
         <p className="text-ink-muted">
-          {round.name} · {round.matchLabel} ·{" "}
+          {card.session_name}
+          {matchLabel && ` · ${matchLabel}`} ·{" "}
           <span className="font-semibold text-fairway-700">
-            {relToPar(team.strokes)}
+            {relToPar(side.strokes, pars)}
           </span>
         </p>
       </header>

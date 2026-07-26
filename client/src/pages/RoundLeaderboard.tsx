@@ -17,9 +17,9 @@ interface LeaderboardMatchRow {
   matchNumber: number;
   players: Record<Side, string[]>;
   state: MatchState;
-  /** e.g. "3&2", "2 up thru 14", "AS". */
+  // e.g. "3&2", "2 up thru 14", "AS".
   statusLabel: string;
-  /** Side currently ahead, or null when all-square / halved. */
+  // Side currently ahead, or null when all-square / halved.
   leader: Side | null;
 }
 
@@ -139,7 +139,8 @@ const RoundLeaderboard = () => {
           <div className="flex items-center gap-3 text-lg font-bold">
             <span className="text-fairway-800">{TEAMS.A}</span>
             <span className="rounded-lg bg-white px-3 py-1 shadow-sm ring-1 ring-fairway-900/5">
-              {STANDINGS.A} <span className="text-ink-muted">–</span> {STANDINGS.B}
+              {STANDINGS.A} <span className="text-ink-muted">–</span>{" "}
+              {STANDINGS.B}
             </span>
             <span className="text-fairway-800">{TEAMS.B}</span>
           </div>
@@ -156,45 +157,45 @@ const RoundLeaderboard = () => {
       <ul className="flex flex-col gap-3">
         {round.matches.map((match) => (
           <li key={match.matchId}>
-           <Link
-            to={`/matches/${match.matchId}`}
-            className="block rounded-xl bg-white p-4 shadow-sm ring-1 ring-fairway-900/5 transition hover:-translate-y-0.5 hover:shadow-md"
-           >
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-ink-muted">
-                Match {match.matchNumber}
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${stateStyles[match.state]}`}
-              >
-                {stateLabels[match.state]}
-              </span>
-            </div>
+            <Link
+              to={`/matches/${match.matchId}`}
+              className="block rounded-xl bg-white p-4 shadow-sm ring-1 ring-fairway-900/5 transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-ink-muted">
+                  Match {match.matchNumber}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${stateStyles[match.state]}`}
+                >
+                  {stateLabels[match.state]}
+                </span>
+              </div>
 
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <span
-                className={`text-right text-sm ${
-                  match.leader === "A"
-                    ? "font-bold text-fairway-800"
-                    : "text-ink-muted"
-                }`}
-              >
-                {match.players.A.join(" / ")}
-              </span>
-              <span className="rounded-md bg-fairway-50 px-2.5 py-1 text-center text-sm font-semibold text-fairway-700 whitespace-nowrap">
-                {match.statusLabel}
-              </span>
-              <span
-                className={`text-left text-sm ${
-                  match.leader === "B"
-                    ? "font-bold text-fairway-800"
-                    : "text-ink-muted"
-                }`}
-              >
-                {match.players.B.join(" / ")}
-              </span>
-            </div>
-           </Link>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                <span
+                  className={`text-right text-sm ${
+                    match.leader === "A"
+                      ? "font-bold text-fairway-800"
+                      : "text-ink-muted"
+                  }`}
+                >
+                  {match.players.A.join(" / ")}
+                </span>
+                <span className="rounded-md bg-fairway-50 px-2.5 py-1 text-center text-sm font-semibold text-fairway-700 whitespace-nowrap">
+                  {match.statusLabel}
+                </span>
+                <span
+                  className={`text-left text-sm ${
+                    match.leader === "B"
+                      ? "font-bold text-fairway-800"
+                      : "text-ink-muted"
+                  }`}
+                >
+                  {match.players.B.join(" / ")}
+                </span>
+              </div>
+            </Link>
           </li>
         ))}
       </ul>

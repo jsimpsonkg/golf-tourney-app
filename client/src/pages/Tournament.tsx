@@ -1,10 +1,4 @@
-import type {
-  TournamentDetail,
-  Team,
-  SessionWithMatches,
-  Player,
-  Tournament,
-} from "@golf/shared";
+import type { TournamentDetail } from "@golf/shared";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -12,7 +6,7 @@ const Tournament = () => {
   const apiUrl = import.meta.env.VITE_API_URL;
   const { id } = useParams<{ id: string }>();
   const [tournament, setTournament] = useState<TournamentDetail>();
-  const [courseName, setCourseName] = useState<string>();
+  //const [courseName, setCourseName] = useState<string>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
