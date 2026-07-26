@@ -102,6 +102,31 @@ export interface TournamentDetail extends Tournament {
 }
 
 // ---------------------------------------------------------------------------
+// Rounds view — GET /api/tournaments/:id/rounds
+// Sessions with matches whose participants carry the player's display name,
+// plus the tournament's teams so the client can order sides (A/B) consistently.
+// ---------------------------------------------------------------------------
+
+/** A match participant with the player's display name resolved. */
+export interface NamedParticipant extends MatchParticipant {
+  player_name: string;
+}
+
+export interface MatchWithNamedParticipants extends Match {
+  participants: NamedParticipant[];
+}
+
+export interface RoundSession extends Session {
+  matches: MatchWithNamedParticipants[];
+}
+
+/** Response shape of GET /api/tournaments/:id/rounds. */
+export interface RoundsView {
+  teams: Team[];
+  sessions: RoundSession[];
+}
+
+// ---------------------------------------------------------------------------
 // Computed scoring shapes (produced by the scoring engine)
 // ---------------------------------------------------------------------------
 
