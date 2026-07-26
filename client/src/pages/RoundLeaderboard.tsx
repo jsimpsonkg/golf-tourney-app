@@ -1,32 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type {
-  MatchDbStatus,
-  MatchState,
-  MatchWithNamedParticipants,
-  RoundsView,
-} from "@golf/shared";
+import type { RoundMatch, RoundsView } from "@golf/shared";
 import { Tabs } from "../components/Tabs";
 import MatchCard from "../components/MatchCard/MatchCard";
 import type {
   LeaderboardMatchRow,
   Side,
 } from "../components/MatchCard/MatchCard.types";
-
-// The DB status enum and the UI's MatchState use different "not started" names.
-const STATE_BY_STATUS: Record<MatchDbStatus, MatchState> = {
-  pending: "not_started",
-  in_progress: "in_progress",
-  completed: "completed",
-};
-
-// Placeholder center-pill text until the scoring engine feeds real match-play
-// status ("3&2", "2 up thru 14", ...) into this view.
-const STATUS_LABEL: Record<MatchState, string> = {
-  not_started: "vs",
-  in_progress: "In progress",
-  completed: "Final",
-};
 
 const RoundLeaderboard = () => {
   const apiUrl = import.meta.env.VITE_API_URL;
@@ -80,19 +60,21 @@ const RoundLeaderboard = () => {
   const [teamA, teamB] = rounds.teams;
   const sideOf = (teamId: string): Side => (teamId === teamB?.id ? "B" : "A");
 
-  const toRow = (match: MatchWithNamedParticipants): LeaderboardMatchRow => {
+  const toRow = (match: RoundMatch): LeaderboardMatchRow => {
     const players: Record<Side, string[]> = { A: [], B: [] };
     for (const p of match.participants) {
       players[sideOf(p.team_id)].push(p.player_name);
     }
-    const state = STATE_BY_STATUS[match.status];
+    const { result } = match;
     return {
       matchId: match.id,
       matchNumber: match.match_number,
       players,
-      state,
-      statusLabel: STATUS_LABEL[state],
-      leader: null, // no scoring data in this view yet
+      state: result.state,
+      // Keep the "vs" placeholder before play begins; otherwise show the
+      // engine's match-play status ("3&2", "2 up thru 14", "AS").
+      statusLabel: result.state === "not_started" ? "vs" : result.status_label,
+      leader: result.leading_team_id ? sideOf(result.leading_team_id) : null,
     };
   };
 

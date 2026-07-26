@@ -2,16 +2,22 @@ import type { Handler } from "express";
 import type {
   MatchParticipant,
   MatchScorecard,
-  MatchWithNamedParticipants,
   MatchWithParticipants,
   NamedParticipant,
+  RoundMatch,
   RoundSession,
   RoundsView,
+  ScoreEntry,
   ScorecardSide,
   SessionWithMatches,
   TournamentDetail,
 } from "@golf/shared";
 import * as repo from "../repositories/golf";
+import {
+  computeLeaderboard,
+  computeMatchResult,
+  type MatchScoringInput,
+} from "../services/scoring";
 
 // ---------------------------------------------------------------------------
 // Handlers — parse the request, call the repository, assemble the response.
@@ -24,6 +30,18 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (v: unknown): v is string =>
   typeof v === "string" && UUID_RE.test(v);
+
+/** Bucket score rows by their match_id for per-match scoring. */
+const groupScoresByMatch = (scores: ScoreEntry[]): Map<string, ScoreEntry[]> => {
+  const byMatch = new Map<string, ScoreEntry[]>();
+  for (const s of scores) {
+    if (!s.match_id) continue;
+    const list = byMatch.get(s.match_id) ?? [];
+    list.push(s);
+    byMatch.set(s.match_id, list);
+  }
+  return byMatch;
+};
 
 /** GET /api/tournaments — list all tournaments. */
 export const getAllTournaments: Handler = async (_req, res) => {
@@ -58,9 +76,11 @@ export const getTournamentById: Handler = async (req, res) => {
     ]);
 
     const matches = await repo.getMatchesBySessions(sessions.map((s) => s.id));
-    const participants = await repo.getParticipantsByMatches(
-      matches.map((m) => m.id),
-    );
+    const [participants, scores, holes] = await Promise.all([
+      repo.getParticipantsByMatches(matches.map((m) => m.id)),
+      repo.getScoreEntriesByMatches(matches.map((m) => m.id)),
+      repo.getCourseHoles(id),
+    ]);
 
     // Group children by parent id for assembly.
     const participantsByMatch = new Map<string, MatchParticipant[]>();
@@ -69,6 +89,34 @@ export const getTournamentById: Handler = async (req, res) => {
       list.push(p);
       participantsByMatch.set(p.match_id, list);
     }
+
+    const scoresByMatch = groupScoresByMatch(scores);
+    const pointValueBySession = new Map(
+      sessions.map((s) => [s.id, s.point_value]),
+    );
+
+    // Build one scoring input per match, grouped by session so we can roll up
+    // both per-session and overall standings from the same engine.
+    const inputsBySession = new Map<string, MatchScoringInput[]>();
+    for (const m of matches) {
+      const input: MatchScoringInput = {
+        match_id: m.id,
+        participants: participantsByMatch.get(m.id) ?? [],
+        scores: scoresByMatch.get(m.id) ?? [],
+        holes,
+        point_value: pointValueBySession.get(m.session_id) ?? 0,
+      };
+      const list = inputsBySession.get(m.session_id) ?? [];
+      list.push(input);
+      inputsBySession.set(m.session_id, list);
+    }
+
+    const overall = computeLeaderboard({
+      tournament_id: id,
+      teams,
+      sessions,
+      matches: [...inputsBySession.values()].flat(),
+    }).standings;
 
     const matchesBySession = new Map<string, MatchWithParticipants[]>();
     for (const m of matches) {
@@ -80,6 +128,12 @@ export const getTournamentById: Handler = async (req, res) => {
     const sessionsOut: SessionWithMatches[] = sessions.map((s) => ({
       ...s,
       matches: matchesBySession.get(s.id) ?? [],
+      standings: computeLeaderboard({
+        tournament_id: id,
+        teams,
+        sessions,
+        matches: inputsBySession.get(s.id) ?? [],
+      }).standings,
     }));
 
     const detail: TournamentDetail = {
@@ -87,6 +141,7 @@ export const getTournamentById: Handler = async (req, res) => {
       teams,
       players,
       sessions: sessionsOut,
+      standings: overall,
     };
 
     res.json(detail);
@@ -117,9 +172,11 @@ export const getSessionInfo: Handler = async (req, res) => {
     ]);
 
     const matches = await repo.getMatchesBySessions(sessions.map((s) => s.id));
-    const participants = await repo.getParticipantsByMatches(
-      matches.map((m) => m.id),
-    );
+    const [participants, scores, holes] = await Promise.all([
+      repo.getParticipantsByMatches(matches.map((m) => m.id)),
+      repo.getScoreEntriesByMatches(matches.map((m) => m.id)),
+      repo.getCourseHoles(id),
+    ]);
 
     // Resolve player_id → name so participants carry a display name.
     const playerNameById = new Map(players.map((p) => [p.id, p.name]));
@@ -132,17 +189,48 @@ export const getSessionInfo: Handler = async (req, res) => {
       participantsByMatch.set(p.match_id, list);
     }
 
-    const matchesBySession = new Map<string, MatchWithNamedParticipants[]>();
+    const scoresByMatch = groupScoresByMatch(scores);
+    const pointValueBySession = new Map(
+      sessions.map((s) => [s.id, s.point_value]),
+    );
+
+    const matchesBySession = new Map<string, RoundMatch[]>();
     for (const m of matches) {
+      const result = computeMatchResult({
+        match_id: m.id,
+        participants: participantsByMatch.get(m.id) ?? [],
+        scores: scoresByMatch.get(m.id) ?? [],
+        holes,
+        point_value: pointValueBySession.get(m.session_id) ?? 0,
+      });
       const list = matchesBySession.get(m.session_id) ?? [];
-      list.push({ ...m, participants: participantsByMatch.get(m.id) ?? [] });
+      list.push({
+        ...m,
+        participants: participantsByMatch.get(m.id) ?? [],
+        result,
+      });
       matchesBySession.set(m.session_id, list);
     }
 
-    const sessionsOut: RoundSession[] = sessions.map((s) => ({
-      ...s,
-      matches: matchesBySession.get(s.id) ?? [],
-    }));
+    const sessionsOut: RoundSession[] = sessions.map((s) => {
+      const sessionMatches = matchesBySession.get(s.id) ?? [];
+      return {
+        ...s,
+        matches: sessionMatches,
+        standings: computeLeaderboard({
+          tournament_id: id,
+          teams,
+          sessions,
+          matches: sessionMatches.map((m) => ({
+            match_id: m.id,
+            participants: participantsByMatch.get(m.id) ?? [],
+            scores: scoresByMatch.get(m.id) ?? [],
+            holes,
+            point_value: s.point_value,
+          })),
+        }).standings,
+      };
+    });
 
     // Return teams alongside sessions so the client can order sides (A/B).
     const roundsView: RoundsView = { teams, sessions: sessionsOut };
@@ -222,12 +310,21 @@ export const getMatchScores: Handler = async (req, res) => {
         current == null ? s.strokes : Math.min(current, s.strokes);
     }
 
+    const result = computeMatchResult({
+      match_id: id,
+      participants,
+      scores,
+      holes,
+      point_value: session.point_value,
+    });
+
     const scorecard: MatchScorecard = {
       match_id: id,
       session_name: session.name,
       match_number: match.match_number,
       pars,
       sides: [...sideByTeam.values()],
+      result,
     };
 
     res.json(scorecard);

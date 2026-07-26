@@ -83,6 +83,22 @@ const Tournament = () => {
     );
   }
 
+  // teams[0]/[1] anchor the left/right columns; standings carry the points.
+  const [teamA, teamB] = tournament.teams;
+  const pointsByTeam = new Map(
+    tournament.standings.map((s) => [s.team_id, s.points]),
+  );
+  const teamPoints = (teamId: string | undefined) =>
+    teamId ? (pointsByTeam.get(teamId) ?? 0) : 0;
+  const aPts = teamPoints(teamA?.id);
+  const bPts = teamPoints(teamB?.id);
+  const leaderId = aPts === bPts ? null : aPts > bPts ? teamA?.id : teamB?.id;
+
+  const sessionPoints = (
+    session: (typeof tournament.sessions)[number],
+    teamId: string | undefined,
+  ) => session.standings.find((s) => s.team_id === teamId)?.points ?? 0;
+
   return (
     <div className="flex flex-col gap-8">
       <header className="text-center">
@@ -105,15 +121,14 @@ const Tournament = () => {
             key={team.name}
             to={`/tournaments/${id}/teams/${team.id}`}
             className={`flex flex-col items-center gap-1 rounded-2xl p-6 shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
-              //leader === side -> GET LEADER
-              team.id === tournament.teams[0].id
+              team.id === leaderId
                 ? "bg-fairway-600 text-white ring-fairway-700"
                 : "bg-white text-fairway-800 ring-fairway-900/5"
             }`}
           >
             <span className="text-sm font-medium opacity-80">{team.name}</span>
             <span className="text-5xl font-extrabold tabular-nums">
-              0{/*team.points //GET POINTS */}
+              {teamPoints(team.id)}
             </span>
             <span className="text-xs opacity-70">View team →</span>
           </Link>
@@ -141,26 +156,26 @@ const Tournament = () => {
             >
               <span
                 className={`text-right text-sm font-semibold tabular-nums ${
-                  /*session.points.A > session.points.B // GET POINTS */
-                  session.id === tournament.sessions[0].id
+                  sessionPoints(session, teamA?.id) >
+                  sessionPoints(session, teamB?.id)
                     ? "text-fairway-700"
                     : "text-ink-muted"
                 }`}
               >
-                0{/*session.points.A*/}
+                {sessionPoints(session, teamA?.id)}
               </span>
               <span className="text-center text-sm font-medium text-ink">
                 {session.name}
               </span>
               <span
                 className={`text-left text-sm font-semibold tabular-nums ${
-                  /*session.points.B > session.points.A*/
-                  session.id === tournament.sessions[0].id
+                  sessionPoints(session, teamB?.id) >
+                  sessionPoints(session, teamA?.id)
                     ? "text-fairway-700"
                     : "text-ink-muted"
                 }`}
               >
-                0{/*session.points.B*/}
+                {sessionPoints(session, teamB?.id)}
               </span>
             </li>
           ))}

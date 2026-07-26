@@ -89,6 +89,8 @@ export interface ScoreEntry {
 
 export interface SessionWithMatches extends Session {
   matches: MatchWithParticipants[];
+  /** Per-team points earned across this session's matches. */
+  standings: TeamStanding[];
 }
 
 export interface MatchWithParticipants extends Match {
@@ -99,6 +101,8 @@ export interface TournamentDetail extends Tournament {
   teams: Team[];
   players: Player[];
   sessions: SessionWithMatches[];
+  /** Overall per-team points across the whole tournament, best first. */
+  standings: TeamStanding[];
 }
 
 // ---------------------------------------------------------------------------
@@ -116,8 +120,15 @@ export interface MatchWithNamedParticipants extends Match {
   participants: NamedParticipant[];
 }
 
+/** A round's match plus its computed match-play result (status, leader, points). */
+export interface RoundMatch extends MatchWithNamedParticipants {
+  result: MatchResult;
+}
+
 export interface RoundSession extends Session {
-  matches: MatchWithNamedParticipants[];
+  matches: RoundMatch[];
+  /** Per-team points earned across this session's matches. */
+  standings: TeamStanding[];
 }
 
 /** Response shape of GET /api/tournaments/:id/rounds. */
@@ -193,4 +204,6 @@ export interface MatchScorecard {
   match_number: number | null;
   pars: number[];
   sides: ScorecardSide[];
+  /** Computed match-play result: status label, leader, holes up, points. */
+  result: MatchResult;
 }

@@ -1,7 +1,6 @@
 import type { MatchScorecard } from "@golf/shared";
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { matchStatus } from "../utils/scorecardUtils";
 import { Link } from "react-router-dom";
 import Scorecard from "../components/Scorecard/Scorecard";
 
@@ -54,7 +53,7 @@ const ViewScores = () => {
     );
   }
 
-  const status = matchStatus(card.sides);
+  const status = card.result.status_label;
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,29 +77,30 @@ const ViewScores = () => {
           <h1 className="text-3xl font-extrabold tracking-tight text-fairway-800">
             Scorecard
           </h1>
-          <p className="text-ink-muted">
-            {card.session_name} · {card.match_number}
-          </p>
+          <p className="text-ink-muted">{card.session_name}</p>
         </div>
-        <div className="flex items-center justify-center gap-3 text-sm">
+        <div className="flex items-center justify-center gap-6 text-sm">
           {card.sides.map((side, idx) => (
-            <div key={side.team_id ?? idx} className="flex items-center gap-3">
+            <div key={side.team_id ?? idx} className="flex items-center gap-6">
               {idx > 0 && <span className="text-ink-muted">vs</span>}
-              <Link
-                to={`/matches/${matchId}/teams/${idx}`}
-                className="inline-flex items-center rounded-full bg-fairway-50 px-3 py-1 font-semibold text-fairway-700 ring-1 ring-fairway-200 transition-colors hover:bg-fairway-100"
-              >
-                <div className="flex flex-wrap items-center gap-1 whitespace-nowrap">
-                  {side.players.map((player, idx2, arr2) => (
-                    <span key={player} className="inline-flex items-center">
-                      {player}
-                      {idx2 < arr2.length - 1 && (
-                        <span className="ml-1 text-ink-muted">/</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </Link>
+              <div className="flex flex-col justify-center items-center gap-2 text-fairway-800 font-semibold">
+                {side.team_name}
+                <Link
+                  to={`/matches/${matchId}/teams/${idx}`}
+                  className="inline-flex items-center rounded-full bg-fairway-50 px-3 py-1 font-semibold text-fairway-700 ring-1 ring-fairway-200 transition-colors hover:bg-fairway-100"
+                >
+                  <div className="flex flex-wrap items-center gap-1 whitespace-nowrap">
+                    {side.players.map((player, idx2, arr2) => (
+                      <span key={player} className="inline-flex items-center">
+                        {player}
+                        {idx2 < arr2.length - 1 && (
+                          <span className="ml-1 text-ink-muted">/</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </Link>
+              </div>
             </div>
           ))}
         </div>

@@ -198,6 +198,20 @@ export const getScoreEntriesByMatch = async (
       .orderBy(score_entries.hole_number)
   ).map(toScoreEntry);
 
+/** Scores for a set of matches (used to score many matches in bulk). */
+export const getScoreEntriesByMatches = async (
+  matchIds: string[],
+): Promise<ScoreEntry[]> =>
+  matchIds.length
+    ? (
+        await db
+          .select()
+          .from(score_entries)
+          .where(inArray(score_entries.match_id, matchIds))
+          .orderBy(score_entries.hole_number)
+      ).map(toScoreEntry)
+    : [];
+
 /** The tournament's holes (par / stroke index / yardage), hole order. */
 export const getCourseHoles = async (
   tournamentId: string,
