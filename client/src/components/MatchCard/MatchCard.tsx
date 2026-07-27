@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { LeaderboardMatchRow } from "./MatchCard.types";
 import type { MatchState } from "@golf/shared";
+import PlayerNames from "../PlayerNames";
 
 const stateStyles: Record<MatchState, string> = {
   completed: "bg-fairway-100 text-fairway-700",
@@ -39,23 +40,21 @@ const MatchCard = ({
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <span
-          className={`text-right text-sm ${
+        <PlayerNames
+          names={players.A}
+          className={`block text-right text-sm ${
             leader === "A" ? "font-bold text-fairway-800" : "text-ink-muted"
           }`}
-        >
-          {players.A.join(" / ")}
-        </span>
+        />
         <span className="rounded-md bg-fairway-50 px-2.5 py-1 text-center text-sm font-semibold text-fairway-700 whitespace-nowrap">
           {statusLabel}
         </span>
-        <span
-          className={`text-left text-sm ${
+        <PlayerNames
+          names={players.B}
+          className={`block text-left text-sm ${
             leader === "B" ? "font-bold text-fairway-800" : "text-ink-muted"
           }`}
-        >
-          {players.B.join(" / ")}
-        </span>
+        />
       </div>
     </Link>
   );

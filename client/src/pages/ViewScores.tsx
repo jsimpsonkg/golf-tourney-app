@@ -1,8 +1,9 @@
 import type { MatchScorecard } from "@golf/shared";
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Scorecard from "../components/Scorecard/Scorecard";
+import PlayerNames from "../components/PlayerNames";
 
 const FRONT = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 const BACK = [9, 10, 11, 12, 13, 14, 15, 16, 17];
@@ -53,13 +54,30 @@ const ViewScores = () => {
     );
   }
 
-  const status = card.result.status_label;
+  // Show who's leading instead of a bare "3&2"; all-square has no leader
+  // and reads "Halved" once the match is done.
+  const { result, sides } = card;
+  const leaderName = result.leading_team_id
+    ? (sides.find((s) => s.team_id === result.leading_team_id)?.team_name ??
+      null)
+    : null;
+
+  const status =
+    result.state === "not_started"
+      ? "Not started"
+      : leaderName == null
+        ? result.state === "completed"
+          ? "Halved"
+          : `All square thru ${result.holes_played}`
+        : result.state === "completed"
+          ? `${leaderName} wins ${result.status_label}`
+          : `${leaderName} · ${result.status_label}`;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Link
-          to={`/tournaments/${matchId}/leaderboard`}
+          to={`/tournaments/${card.tournament_id}/leaderboard`}
           className="text-sm font-semibold text-fairway-600 hover:text-fairway-700"
         >
           ← Leaderboard
@@ -72,36 +90,34 @@ const ViewScores = () => {
         </Link>
       </div>
 
-      <header className="flex flex-col items-center gap-3 text-center">
+      <header className="flex flex-col items-center gap-5 text-center">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-fairway-800">
             Scorecard
           </h1>
           <p className="text-ink-muted">{card.session_name}</p>
         </div>
-        <div className="flex items-center justify-center gap-6 text-sm">
+        <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-3">
           {card.sides.map((side, idx) => (
-            <div key={side.team_id ?? idx} className="flex items-center gap-6">
-              {idx > 0 && <span className="text-ink-muted">vs</span>}
-              <div className="flex flex-col justify-center items-center gap-2 text-fairway-800 font-semibold">
-                {side.team_name}
+            <Fragment key={side.team_id ?? idx}>
+              {idx > 0 && (
+                <span className="text-sm font-medium text-ink-muted">vs</span>
+              )}
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-sm font-semibold text-fairway-800">
+                  {side.team_name}
+                </span>
                 <Link
                   to={`/matches/${matchId}/teams/${idx}`}
-                  className="inline-flex items-center rounded-full bg-fairway-50 px-3 py-1 font-semibold text-fairway-700 ring-1 ring-fairway-200 transition-colors hover:bg-fairway-100"
+                  className="rounded-full bg-fairway-50 px-4 py-1.5 ring-1 ring-fairway-200 transition-colors hover:bg-fairway-100"
                 >
-                  <div className="flex flex-wrap items-center gap-1 whitespace-nowrap">
-                    {side.players.map((player, idx2, arr2) => (
-                      <span key={player} className="inline-flex items-center">
-                        {player}
-                        {idx2 < arr2.length - 1 && (
-                          <span className="ml-1 text-ink-muted">/</span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
+                  <PlayerNames
+                    names={side.players}
+                    className="text-sm font-semibold text-fairway-700"
+                  />
                 </Link>
               </div>
-            </div>
+            </Fragment>
           ))}
         </div>
       </header>

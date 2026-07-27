@@ -3,13 +3,11 @@ import type {
   MatchParticipant,
   MatchScorecard,
   MatchWithParticipants,
-  NamedParticipant,
-  RoundMatch,
-  RoundSession,
   RoundsView,
   ScoreEntry,
   ScorecardSide,
   SessionWithMatches,
+  TeamPageInfo,
   TournamentDetail,
 } from "@golf/shared";
 import * as repo from "../repositories/golf";
@@ -18,21 +16,21 @@ import {
   computeMatchResult,
   type MatchScoringInput,
 } from "../services/scoring";
+import { buildRoundSessions, loadRoundData } from "../services/rounds";
 
-// ---------------------------------------------------------------------------
-// Handlers — parse the request, call the repository, assemble the response.
-// No SQL lives here; queries belong in ../repositories/golf.
-// ---------------------------------------------------------------------------
+// Handlers only parse requests and assemble responses; the SQL lives in
+// ../repositories/golf.
 
-// The id columns are Postgres uuid; querying them with a non-uuid string throws
-// a DB error (→ 500). Reject malformed ids up front as a 400 instead.
+// id columns are Postgres uuids, so a non-uuid string blows up as a 500.
+// Catch malformed ids here and return a 400 instead.
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (v: unknown): v is string =>
   typeof v === "string" && UUID_RE.test(v);
 
-/** Bucket score rows by their match_id for per-match scoring. */
-const groupScoresByMatch = (scores: ScoreEntry[]): Map<string, ScoreEntry[]> => {
+const groupScoresByMatch = (
+  scores: ScoreEntry[],
+): Map<string, ScoreEntry[]> => {
   const byMatch = new Map<string, ScoreEntry[]>();
   for (const s of scores) {
     if (!s.match_id) continue;
@@ -43,7 +41,7 @@ const groupScoresByMatch = (scores: ScoreEntry[]): Map<string, ScoreEntry[]> => 
   return byMatch;
 };
 
-/** GET /api/tournaments — list all tournaments. */
+// GET /api/tournaments
 export const getAllTournaments: Handler = async (_req, res) => {
   try {
     res.json(await repo.listTournaments());
@@ -53,8 +51,8 @@ export const getAllTournaments: Handler = async (_req, res) => {
   }
 };
 
-/** GET /api/tournaments/:id — one tournament with teams, players, and sessions
- *  (each session nesting its matches, each match nesting its participants). */
+// GET /api/tournaments/:id — tournament with teams, players, and nested
+// sessions → matches → participants.
 export const getTournamentById: Handler = async (req, res) => {
   try {
     const id = req.params.id;
@@ -82,7 +80,6 @@ export const getTournamentById: Handler = async (req, res) => {
       repo.getCourseHoles(id),
     ]);
 
-    // Group children by parent id for assembly.
     const participantsByMatch = new Map<string, MatchParticipant[]>();
     for (const p of participants) {
       const list = participantsByMatch.get(p.match_id) ?? [];
@@ -95,8 +92,8 @@ export const getTournamentById: Handler = async (req, res) => {
       sessions.map((s) => [s.id, s.point_value]),
     );
 
-    // Build one scoring input per match, grouped by session so we can roll up
-    // both per-session and overall standings from the same engine.
+    // Group scoring inputs by session so per-session and overall standings
+    // both come out of the same engine.
     const inputsBySession = new Map<string, MatchScoringInput[]>();
     for (const m of matches) {
       const input: MatchScoringInput = {
@@ -165,75 +162,12 @@ export const getSessionInfo: Handler = async (req, res) => {
       return;
     }
 
-    const [teams, players, sessions] = await Promise.all([
-      repo.getTeamsByTournament(id),
-      repo.getPlayersByTournament(id),
-      repo.getSessionsByTournament(id),
-    ]);
-
-    const matches = await repo.getMatchesBySessions(sessions.map((s) => s.id));
-    const [participants, scores, holes] = await Promise.all([
-      repo.getParticipantsByMatches(matches.map((m) => m.id)),
-      repo.getScoreEntriesByMatches(matches.map((m) => m.id)),
-      repo.getCourseHoles(id),
-    ]);
-
-    // Resolve player_id → name so participants carry a display name.
-    const playerNameById = new Map(players.map((p) => [p.id, p.name]));
-
-    // Group children by parent id for assembly.
-    const participantsByMatch = new Map<string, NamedParticipant[]>();
-    for (const p of participants) {
-      const list = participantsByMatch.get(p.match_id) ?? [];
-      list.push({ ...p, player_name: playerNameById.get(p.player_id) ?? "" });
-      participantsByMatch.set(p.match_id, list);
-    }
-
-    const scoresByMatch = groupScoresByMatch(scores);
-    const pointValueBySession = new Map(
-      sessions.map((s) => [s.id, s.point_value]),
-    );
-
-    const matchesBySession = new Map<string, RoundMatch[]>();
-    for (const m of matches) {
-      const result = computeMatchResult({
-        match_id: m.id,
-        participants: participantsByMatch.get(m.id) ?? [],
-        scores: scoresByMatch.get(m.id) ?? [],
-        holes,
-        point_value: pointValueBySession.get(m.session_id) ?? 0,
-      });
-      const list = matchesBySession.get(m.session_id) ?? [];
-      list.push({
-        ...m,
-        participants: participantsByMatch.get(m.id) ?? [],
-        result,
-      });
-      matchesBySession.set(m.session_id, list);
-    }
-
-    const sessionsOut: RoundSession[] = sessions.map((s) => {
-      const sessionMatches = matchesBySession.get(s.id) ?? [];
-      return {
-        ...s,
-        matches: sessionMatches,
-        standings: computeLeaderboard({
-          tournament_id: id,
-          teams,
-          sessions,
-          matches: sessionMatches.map((m) => ({
-            match_id: m.id,
-            participants: participantsByMatch.get(m.id) ?? [],
-            scores: scoresByMatch.get(m.id) ?? [],
-            holes,
-            point_value: s.point_value,
-          })),
-        }).standings,
-      };
-    });
-
-    // Return teams alongside sessions so the client can order sides (A/B).
-    const roundsView: RoundsView = { teams, sessions: sessionsOut };
+    const data = await loadRoundData(id);
+    // teams go out with the sessions so the client can order sides (A/B).
+    const roundsView: RoundsView = {
+      teams: data.teams,
+      sessions: buildRoundSessions(data),
+    };
     res.json(roundsView);
   } catch (err) {
     console.error("getSessionInfo failed:", err);
@@ -241,10 +175,9 @@ export const getSessionInfo: Handler = async (req, res) => {
   }
 };
 
-/** GET /api/matches/:id/scores — self-contained scorecard for one match:
- *  both sides with pairing names + hole-by-hole strokes, and the course pars.
- *  Course holes live on the tournament, so resolve match → session → tournament
- *  before loading them. */
+// GET /api/matches/:id/scores — scorecard for one match: both sides with
+// pairing names, hole-by-hole strokes, and the course pars. Course holes hang
+// off the tournament, so we walk match → session → tournament to load them.
 export const getMatchScores: Handler = async (req, res) => {
   try {
     const id = req.params.id;
@@ -274,12 +207,12 @@ export const getMatchScores: Handler = async (req, res) => {
 
     const playerName = new Map(players.map((p) => [p.id, p.name]));
     const teamName = new Map(teams.map((t) => [t.id, t.name]));
-    // Hole order is defined by `holes` (repo returns them by hole_number).
+    // holes come back ordered by hole_number, so its index is the hole order.
     const indexByHole = new Map(holes.map((h, i) => [h.hole_number, i]));
     const pars = holes.map((h) => h.par);
 
-    // One side per team, in first-seen participant order (so teamIndex 0/1 is
-    // stable for the client).
+    // One side per team, keyed in first-seen participant order so 0/1 stays
+    // stable for the client.
     const sideByTeam = new Map<string, ScorecardSide>();
     for (const p of participants) {
       let side = sideByTeam.get(p.team_id);
@@ -296,7 +229,7 @@ export const getMatchScores: Handler = async (req, res) => {
       if (name) side.players.push(name);
     }
 
-    // Fold each score into its side's strokes array (best ball on ties).
+    // Fold each score into its side's strokes (best ball wins a hole).
     for (const s of scores) {
       const teamId =
         s.team_id ??
@@ -320,6 +253,7 @@ export const getMatchScores: Handler = async (req, res) => {
 
     const scorecard: MatchScorecard = {
       match_id: id,
+      tournament_id: session.tournament_id,
       session_name: session.name,
       match_number: match.match_number,
       pars,
@@ -334,7 +268,7 @@ export const getMatchScores: Handler = async (req, res) => {
   }
 };
 
-/** POST /api/matches/:id/scores — record (or correct) a score for a hole. */
+// POST /api/matches/:id/scores — record or correct a hole's score.
 export const createMatchScore: Handler = async (req, res) => {
   try {
     const matchId = req.params.id;
@@ -351,8 +285,7 @@ export const createMatchScore: Handler = async (req, res) => {
       return;
     }
 
-    // Exactly one of player_id / team_id must be present (mirrors the DB XOR
-    // check + partial unique indexes).
+    // Need exactly one of player_id / team_id (matches the DB XOR check).
     const hasPlayer = typeof player_id === "string";
     const hasTeam = typeof team_id === "string";
     if (hasPlayer === hasTeam) {
@@ -378,6 +311,56 @@ export const createMatchScore: Handler = async (req, res) => {
     res.status(201).json(entry);
   } catch (err) {
     console.error("createMatchScore failed:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getTeamsInfo: Handler = async (req, res) => {
+  try {
+    const { id, teamId } = req.params;
+
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "Invalid tournament id" });
+      return;
+    } else if (!isUuid(teamId)) {
+      res.status(400).json({ error: "Invalid team id" });
+      return;
+    }
+
+    const tournament = await repo.getTournament(id);
+    if (!tournament) {
+      res.status(404).json({ error: "Tournament not found" });
+      return;
+    }
+
+    const [team] = await repo.getTeamById(teamId);
+    if (!team || team.tournament_id !== tournament.id) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
+
+    const data = await loadRoundData(id);
+
+    // Keep only this team's matches (it owns a match if any participant plays
+    // for it) and drop sessions it isn't in. Standings still count every team.
+    const sessions = buildRoundSessions(data, {
+      matchFilter: (m) => m.participants.some((p) => p.team_id === teamId),
+      dropEmptySessions: true,
+    });
+    const points =
+      data.overallStandings.find((s) => s.team_id === teamId)?.points ?? 0;
+
+    const teamPageInfo: TeamPageInfo = {
+      team,
+      points,
+      players: data.players.filter((p) => p.team_id === teamId),
+      sessions,
+      teams: data.teams,
+    };
+
+    res.json(teamPageInfo);
+  } catch (err) {
+    console.error("getTeamsInfo failed:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -6,7 +6,6 @@ const Tournament = () => {
   const apiUrl = import.meta.env.VITE_API_URL;
   const { id } = useParams<{ id: string }>();
   const [tournament, setTournament] = useState<TournamentDetail>();
-  //const [courseName, setCourseName] = useState<string>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,40 +31,9 @@ const Tournament = () => {
     }
   }
 
-  /*async function getCourseName() {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${apiUrl}/api/tournaments/${id}`);
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
-      const body = await response.json();
-      const tournamentDetail = body as TournamentDetail;
-
-      setTournament(tournamentDetail);
-    } catch (err) {
-      console.error(err);
-      setError(
-        err instanceof Error ? err.message : "Failed to load tournament",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }*/
-
   useEffect(() => {
     loadData();
   }, [id]);
-
-  /* GET POINTS
-  const leader: Team | null =
-    TEAMS.A.points === TEAMS.B.points
-      ? null
-      : TEAMS.A.points > TEAMS.B.points
-        ? "A"
-        : "B";
-  */
 
   if (isLoading) {
     return (
@@ -83,7 +51,7 @@ const Tournament = () => {
     );
   }
 
-  // teams[0]/[1] anchor the left/right columns; standings carry the points.
+  // teamA/teamB are the left/right columns; points come from standings.
   const [teamA, teamB] = tournament.teams;
   const pointsByTeam = new Map(
     tournament.standings.map((s) => [s.team_id, s.points]),
@@ -105,13 +73,7 @@ const Tournament = () => {
         <h1 className="text-3xl font-extrabold tracking-tight text-fairway-800 sm:text-4xl">
           {tournament.name}
         </h1>
-        <p className="text-ink-muted mt-4 text-lg">
-          Muskoka Highlands
-          {/*Course Name*/}
-        </p>
-        <p className="text-ink-muted">
-          {/*First to {TOURNAMENT.pointsToWin} points wins*/}
-        </p>
+        <p className="text-ink-muted mt-4 text-lg">Muskoka Highlands</p>
       </header>
 
       {/* Headline standings */}

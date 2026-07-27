@@ -1,55 +1,123 @@
-import { Link, useParams } from "react-router-dom";
+import type {
+  MatchState,
+  RoundMatch,
+  RoundSession,
+  TeamPageInfo,
+} from "@golf/shared";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import TeamMatchCard from "../components/TeamMatchCard/TeamMatchCard";
+import type { Result } from "../components/TeamMatchCard/TeamMatchCard.types";
+import { Tabs } from "../components/Tabs";
 
-// ---------------------------------------------------------------------------
-// HARDCODED FIXTURE — remove once team data is fetched.
-// Replace `TEAM` with a `Team` + its `Player[]` (filtered from
-// TournamentDetail), and `RESULTS` with this team's `MatchResult`s.
-// ---------------------------------------------------------------------------
+// Turn a round match into TeamMatchCard props, seen from teamId's side
+// (opponent is the other team, win/loss is relative to us).
+function toCardProps(match: RoundMatch, session: RoundSession, teamId: string) {
+  const { result } = match;
 
-interface TeamMatch {
-  id: string;
-  session: string;
-  opponent: string;
-  result: "win" | "loss" | "halved" | "live";
-  statusLabel: string;
+  const opponent = match.participants
+    .filter((p) => p.team_id !== teamId)
+    .map((p) => p.player_name)
+    .join(" / ");
+
+  let outcome: Result;
+  if (result.state === "not_started") {
+    outcome = "upcoming";
+  } else if (result.state === "in_progress") {
+    outcome = "live";
+  } else if (result.leading_team_id === null) {
+    outcome = "halved";
+  } else if (result.leading_team_id === teamId) {
+    outcome = "win";
+  } else {
+    outcome = "loss";
+  }
+
+  // status_label reads from the leader's side ("2 up thru 3"), so flip "up" to
+  // "down" when we're the trailing team. "AS" and "3&2" don't need it.
+  const trailing =
+    result.leading_team_id !== null && result.leading_team_id !== teamId;
+  const statusLabel = trailing
+    ? result.status_label.replace(" up", " down")
+    : result.status_label;
+
+  return {
+    id: match.id,
+    session: session.name ?? session.session_type ?? "Match",
+    opponent,
+    result: outcome,
+    statusLabel,
+  };
 }
 
-const TEAM = {
-  name: "USA",
-  points: 4.5,
-  players: [
-    "Scottie Scheffler",
-    "Patrick Cantlay",
-    "Xander Schauffele",
-    "Justin Thomas",
-    "Jordan Spieth",
-    "Max Homa",
-  ],
-};
-
-const RESULTS: TeamMatch[] = [
-  { id: "m1", session: "Foursomes", opponent: "McIlroy / Fleetwood", result: "win", statusLabel: "3&2" },
-  { id: "m2", session: "Foursomes", opponent: "Rahm / Hovland", result: "loss", statusLabel: "1 dn" },
-  { id: "m3", session: "Foursomes", opponent: "Lowry / Straka", result: "halved", statusLabel: "AS" },
-  { id: "m4", session: "Fourball", opponent: "McIlroy / Rahm", result: "live", statusLabel: "2 up thru 14" },
-];
-
-const resultStyles: Record<TeamMatch["result"], string> = {
-  win: "bg-fairway-100 text-fairway-700",
-  loss: "bg-red-100 text-red-700",
-  halved: "bg-black/5 text-ink-muted",
-  live: "bg-sand-200 text-sand-500",
-};
-
-const resultLabels: Record<TeamMatch["result"], string> = {
-  win: "Won",
-  loss: "Lost",
-  halved: "Halved",
-  live: "Live",
+// completed first, then live, then upcoming.
+const STATE_ORDER: Record<MatchState, number> = {
+  completed: 0,
+  in_progress: 1,
+  not_started: 2,
 };
 
 const TeamPage = () => {
-  const { id } = useParams<{ id: string }>();
+  const apiUrl = import.meta.env.VITE_API_URL;
+  const { id, teamId } = useParams<{ id: string; teamId: string }>();
+  const navigate = useNavigate();
+  const [teamInfo, setTeamInfo] = useState<TeamPageInfo>();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadData() {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/tournaments/${id}/teams/${teamId}`,
+      );
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      const body = await response.json();
+      const teamInfo = body as TeamPageInfo;
+
+      setTeamInfo(teamInfo);
+    } catch (err) {
+      console.error(err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load tournament",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+  }, [id, teamId]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
+        Loading tournament...
+      </div>
+    );
+  }
+
+  if (error || !teamInfo) {
+    return (
+      <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
+        {error ?? "Team Information not found."}
+      </div>
+    );
+  }
+
+  // One flat list across sessions, ordered by state. sort() is stable, so
+  // matches keep their session/match order within each group.
+  const matches = teamInfo.sessions
+    .flatMap((session) => session.matches.map((match) => ({ match, session })))
+    .sort(
+      (a, b) =>
+        STATE_ORDER[a.match.result.state] - STATE_ORDER[b.match.result.state],
+    );
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,10 +127,23 @@ const TeamPage = () => {
       >
         ← Standings
       </Link>
+
+      <Tabs
+        ariaLabel="Teams"
+        value={teamInfo.team.id}
+        tabs={teamInfo.teams.map((t) => ({ label: t.name, value: t.id }))}
+        onChange={(nextTeamId) =>
+          navigate(`/tournaments/${id}/teams/${nextTeamId}`)
+        }
+      />
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-fairway-600 p-6 text-white shadow-sm">
-        <h1 className="text-3xl font-extrabold tracking-tight">{TEAM.name}</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">
+          {teamInfo.team.name}
+        </h1>
         <div className="text-right">
-          <div className="text-4xl font-extrabold tabular-nums">{TEAM.points}</div>
+          <div className="text-4xl font-extrabold tabular-nums">
+            {teamInfo.points}
+          </div>
           <div className="text-sm opacity-80">points</div>
         </div>
       </header>
@@ -70,12 +151,12 @@ const TeamPage = () => {
       <section>
         <h2 className="mb-3 text-sm font-semibold text-ink-muted">Roster</h2>
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {TEAM.players.map((player) => (
+          {teamInfo.players.map((player) => (
             <li
-              key={player}
+              key={player.id}
               className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-fairway-800 shadow-sm ring-1 ring-fairway-900/5"
             >
-              {player}
+              {player.name}
             </li>
           ))}
         </ul>
@@ -84,31 +165,11 @@ const TeamPage = () => {
       <section>
         <h2 className="mb-3 text-sm font-semibold text-ink-muted">Matches</h2>
         <ul className="flex flex-col gap-3">
-          {RESULTS.map((match) => (
-            <Link
+          {matches.map(({ match, session }) => (
+            <TeamMatchCard
               key={match.id}
-              to={`/matches/${match.id}`}
-              className="flex items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-fairway-900/5 transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <div className="flex flex-col">
-                <span className="text-xs font-medium text-ink-muted">
-                  {match.session}
-                </span>
-                <span className="text-sm font-semibold text-fairway-800">
-                  vs {match.opponent}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-ink-muted">
-                  {match.statusLabel}
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyles[match.result]}`}
-                >
-                  {resultLabels[match.result]}
-                </span>
-              </div>
-            </Link>
+              {...toCardProps(match, session, teamInfo.team.id)}
+            />
           ))}
         </ul>
       </section>

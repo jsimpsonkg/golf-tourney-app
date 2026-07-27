@@ -1,20 +1,13 @@
-/**
- * Shared domain contract for the golf tournament app.
- *
- * Single source of truth for the JSON shapes the API returns and the scoring
- * engine produces. Imported by both `client` and `server` via `@golf/shared`.
- */
+// JSON shapes shared by the client and server (imported via @golf/shared).
 
-// ---------------------------------------------------------------------------
-// Entities (mirror the Drizzle schema, serialized to JSON)
-// ---------------------------------------------------------------------------
+// --- Entities (mirror the Drizzle schema) ---
 
 export interface Tournament {
   id: string;
   name: string;
-  start_date: string | null; // ISO timestamp
-  image_url: string | null; // path or URL for the tournament's card image
-  format: string | null; // e.g. 'rydercup', 'strokeplay'
+  start_date: string | null;
+  image_url: string | null;
+  format: string | null; // 'rydercup', 'strokeplay', etc.
   settings: Record<string, unknown>;
   created_at: string;
 }
@@ -37,7 +30,7 @@ export interface Session {
   tournament_id: string;
   name: string | null;
   session_type: string | null; // 'foursomes' | 'fourball' | 'singles' | ...
-  point_value: number; // points a single match in this session is worth
+  point_value: number; // points one match here is worth
   sort_order: number;
 }
 
@@ -83,13 +76,10 @@ export interface ScoreEntry {
   created_at: string;
 }
 
-// ---------------------------------------------------------------------------
-// Nested read shapes returned by the API
-// ---------------------------------------------------------------------------
+// --- Nested read shapes returned by the API ---
 
 export interface SessionWithMatches extends Session {
   matches: MatchWithParticipants[];
-  /** Per-team points earned across this session's matches. */
   standings: TeamStanding[];
 }
 
@@ -101,17 +91,13 @@ export interface TournamentDetail extends Tournament {
   teams: Team[];
   players: Player[];
   sessions: SessionWithMatches[];
-  /** Overall per-team points across the whole tournament, best first. */
-  standings: TeamStanding[];
+  standings: TeamStanding[]; // overall, best first
 }
 
-// ---------------------------------------------------------------------------
-// Rounds view — GET /api/tournaments/:id/rounds
-// Sessions with matches whose participants carry the player's display name,
-// plus the tournament's teams so the client can order sides (A/B) consistently.
-// ---------------------------------------------------------------------------
+// Rounds view: GET /api/tournaments/:id/rounds
+// Sessions + matches with named participants, plus teams so the client can
+// order sides (A/B) consistently.
 
-/** A match participant with the player's display name resolved. */
 export interface NamedParticipant extends MatchParticipant {
   player_name: string;
 }
@@ -120,52 +106,37 @@ export interface MatchWithNamedParticipants extends Match {
   participants: NamedParticipant[];
 }
 
-/** A round's match plus its computed match-play result (status, leader, points). */
 export interface RoundMatch extends MatchWithNamedParticipants {
   result: MatchResult;
 }
 
 export interface RoundSession extends Session {
   matches: RoundMatch[];
-  /** Per-team points earned across this session's matches. */
   standings: TeamStanding[];
 }
 
-/** Response shape of GET /api/tournaments/:id/rounds. */
 export interface RoundsView {
   teams: Team[];
   sessions: RoundSession[];
 }
 
-// ---------------------------------------------------------------------------
-// Computed scoring shapes (produced by the scoring engine)
-// ---------------------------------------------------------------------------
+// --- Computed scoring shapes ---
 
 export type MatchState = "not_started" | "in_progress" | "completed";
 
-/** Points awarded to one team for a completed (or halved) match. */
 export interface MatchPoints {
   team_id: string;
   points: number;
 }
 
-/**
- * Result of interpreting a single match's hole-by-hole scores through a
- * match-play lens.
- */
 export interface MatchResult {
   match_id: string;
   state: MatchState;
-  /** Team currently ahead; null when all-square / halved. */
-  leading_team_id: string | null;
-  /** How many holes the leading team is up (0 = all square). */
+  leading_team_id: string | null; // null when all-square
   holes_up: number;
-  /** Holes both sides have completed. */
   holes_played: number;
-  /** Human-readable status, e.g. "3&2", "2 up", "AS", "1 up thru 14". */
-  status_label: string;
-  /** Points once decided/halved; null while still in progress. */
-  points: MatchPoints[] | null;
+  status_label: string; // "3&2", "2 up", "AS", "1 up thru 14", ...
+  points: MatchPoints[] | null; // null while in progress
 }
 
 export interface TeamStanding {
@@ -174,36 +145,40 @@ export interface TeamStanding {
   points: number;
 }
 
-/** Everything the live leaderboard view needs, per tournament. */
 export interface LeaderboardView {
   tournament_id: string;
   standings: TeamStanding[];
   matches: MatchResult[];
 }
 
-// ---------------------------------------------------------------------------
-// Scorecard view (one match, both sides) — self-contained for the TeamScores /
-// ViewScores pages, which only know a matchId.
-// ---------------------------------------------------------------------------
+// --- Scorecard view (one match, both sides) ---
+// Self-contained for the ViewScores/TeamScores pages, which only have a matchId.
 
-/** One side of a match: its team, pairing, and hole-by-hole strokes. */
 export interface ScorecardSide {
   team_id: string;
   team_name: string;
-  /** Player names on this side, e.g. ["Scheffler", "Cantlay"]. */
   players: string[];
-  /** One score per hole, in `pars` order; null where not yet entered.
-   *  Best ball (lowest) when a side has multiple players scoring a hole. */
+  // One score per hole, in `pars` order; null until entered.
+  // Best ball (lowest) when multiple players score a hole.
   strokes: (number | null)[];
 }
 
-/** Everything a scorecard view needs for a single match, in hole order. */
 export interface MatchScorecard {
   match_id: string;
+  tournament_id: string;
   session_name: string | null;
   match_number: number | null;
   pars: number[];
   sides: ScorecardSide[];
-  /** Computed match-play result: status label, leader, holes up, points. */
   result: MatchResult;
+}
+
+// --- Team page view ---
+
+export interface TeamPageInfo {
+  team: Team;
+  points: number;
+  players: Player[];
+  sessions: RoundSession[];
+  teams: Team[]; // all teams, for the team-switch tabs
 }

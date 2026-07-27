@@ -1,9 +1,5 @@
-/**
- * Scoring engine — pure functions that interpret hole-by-hole scores through a
- * match-play lens. No DB or HTTP here: callers (route handlers) load rows via
- * ../repositories/golf and pass them in, so this stays trivially testable.
- *
- */
+// Pure match-play scoring. No DB or HTTP — callers load the rows and pass them
+// in, which keeps this easy to test.
 import type {
   CourseHole,
   MatchParticipant,
@@ -21,11 +17,9 @@ export interface MatchScoringInput {
   participants: MatchParticipant[];
   scores: ScoreEntry[];
   holes: CourseHole[];
-  /** Points this match is worth (from its session). */
-  point_value: number;
+  point_value: number; // what this match is worth, from its session
 }
 
-/** Interpret one match's scores into holes-up / status / points. */
 export const computeMatchResult = ({
   match_id,
   participants,
@@ -36,8 +30,7 @@ export const computeMatchResult = ({
   const teamIds = [...new Set(participants.map((p) => p.team_id))];
   const holeIndex = new Map(holes.map((h, i) => [h.hole_number, i]));
 
-  // Best-ball stroke array per team, indexed to match `holes` order.
-  // null = no score entered for that hole yet.
+  // Per-team best-ball strokes, indexed to `holes` order; null = no score yet.
   const strokesByTeam = new Map<string, (number | null)[]>();
   for (const teamId of teamIds) {
     strokesByTeam.set(
@@ -56,7 +49,7 @@ export const computeMatchResult = ({
     const arr = strokesByTeam.get(teamId);
     if (!arr) continue;
     const current = arr[i];
-    // Best ball: lowest score counts when a side has multiple players.
+    // Lowest score on the side counts.
     arr[i] = current == null ? s.strokes : Math.min(current, s.strokes);
   }
 
@@ -64,8 +57,7 @@ export const computeMatchResult = ({
   const a = teamAId != null ? strokesByTeam.get(teamAId) : undefined;
   const b = teamBId != null ? strokesByTeam.get(teamBId) : undefined;
 
-  // A match needs exactly two sides to be scored. Until both exist, report an
-  // empty (not-started) result rather than guessing.
+  // Need two sides to score a match; until then it's just not started.
   if (teamAId == null || teamBId == null || !a || !b) {
     return {
       match_id,
@@ -78,8 +70,7 @@ export const computeMatchResult = ({
     };
   }
 
-  // Walk the holes both sides have completed. `net` is signed: positive means
-  // team A is up, negative means team B is up.
+  // Walk holes both sides finished. net is signed: + means A is up, - means B.
   let net = 0;
   let holesPlayed = 0;
   for (let i = 0; i < holes.length; i++) {
@@ -94,8 +85,8 @@ export const computeMatchResult = ({
   const lead = Math.abs(net);
   const holesRemaining = holes.length - holesPlayed;
   const allPlayed = holesRemaining === 0;
-  // Match play ends the moment the lead can no longer be caught, so remaining
-  // holes go unplayed (e.g. "3&2"). All-square after the last hole is a halve.
+  // A match ends once the lead can't be caught (the "3&2" case); level after
+  // the last hole is a halve.
   const decided = holesPlayed > 0 && lead > holesRemaining;
   const completed = decided || (holesPlayed > 0 && allPlayed);
 
@@ -118,7 +109,7 @@ export const computeMatchResult = ({
   let points: MatchPoints[] | null = null;
   if (completed) {
     if (net === 0) {
-      // Halved: split the match's point value.
+      // Halved — split the points.
       points = [
         { team_id: teamAId, points: point_value / 2 },
         { team_id: teamBId, points: point_value / 2 },
@@ -151,7 +142,7 @@ export interface LeaderboardInput {
   matches: MatchScoringInput[];
 }
 
-/** Roll individual match results up into per-team standings. */
+// Roll match results up into per-team standings.
 export const computeLeaderboard = (
   input: LeaderboardInput,
 ): LeaderboardView => {

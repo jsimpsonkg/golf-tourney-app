@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, and } from "drizzle-orm";
 import { db } from "../db/index";
 import {
   tournaments,
@@ -22,10 +22,8 @@ import type {
   MatchDbStatus,
 } from "@golf/shared";
 
-// ---------------------------------------------------------------------------
-// Row → API-shape mappers (Drizzle returns Date/numeric-as-string; the shared
-// contract is JSON-friendly, so normalize here).
-// ---------------------------------------------------------------------------
+// Drizzle hands back Dates and numeric-as-string; these map rows to the
+// JSON-friendly shared shapes so callers never deal with raw rows.
 
 type Row<T extends { $inferSelect: unknown }> = T["$inferSelect"];
 
@@ -98,16 +96,11 @@ const toScoreEntry = (r: Row<typeof score_entries>): ScoreEntry => ({
   created_at: r.created_at.toISOString(),
 });
 
-// ---------------------------------------------------------------------------
-// Queries — each returns mapped domain objects, so callers never touch raw
-// rows. Composed by the route handlers into the nested read shapes.
-// ---------------------------------------------------------------------------
+// --- Queries ---
 
-/** All tournaments, unordered. */
 export const listTournaments = async (): Promise<Tournament[]> =>
   (await db.select().from(tournaments)).map(toTournament);
 
-/** One tournament by id, or null if it doesn't exist. */
 export const getTournament = async (id: string): Promise<Tournament | null> => {
   const [row] = await db
     .select()
@@ -116,13 +109,11 @@ export const getTournament = async (id: string): Promise<Tournament | null> => {
   return row ? toTournament(row) : null;
 };
 
-/** One match by id, or null. */
 export const getMatch = async (id: string): Promise<Match | null> => {
   const [row] = await db.select().from(matches).where(eq(matches.id, id));
   return row ? toMatch(row) : null;
 };
 
-/** One session by id, or null. */
 export const getSession = async (id: string): Promise<Session | null> => {
   const [row] = await db.select().from(sessions).where(eq(sessions.id, id));
   return row ? toSession(row) : null;
@@ -135,6 +126,9 @@ export const getTeamsByTournament = async (
     await db.select().from(teams).where(eq(teams.tournament_id, tournamentId))
   ).map(toTeam);
 
+export const getTeamById = async (teamId: string): Promise<Team[]> =>
+  (await db.select().from(teams).where(eq(teams.id, teamId))).map(toTeam);
+
 export const getPlayersByTournament = async (
   tournamentId: string,
 ): Promise<Player[]> =>
@@ -143,6 +137,22 @@ export const getPlayersByTournament = async (
       .select()
       .from(players)
       .where(eq(players.tournament_id, tournamentId))
+  ).map(toPlayer);
+
+export const getPlayersByTeam = async (
+  tournamentId: string,
+  teamId: string,
+): Promise<Player[]> =>
+  (
+    await db
+      .select()
+      .from(players)
+      .where(
+        and(
+          eq(players.tournament_id, tournamentId),
+          eq(players.team_id, teamId),
+        ),
+      )
   ).map(toPlayer);
 
 export const getSessionsByTournament = async (
@@ -168,7 +178,6 @@ export const getMatchesBySessions = async (
       ).map(toMatch)
     : [];
 
-/** Participants for a set of matches (used to nest under matches in bulk). */
 export const getParticipantsByMatches = async (
   matchIds: string[],
 ): Promise<MatchParticipant[]> =>
@@ -181,12 +190,10 @@ export const getParticipantsByMatches = async (
       ).map(toParticipant)
     : [];
 
-/** Participants for a single match (scorecard view). */
 export const getParticipantsByMatch = (
   matchId: string,
 ): Promise<MatchParticipant[]> => getParticipantsByMatches([matchId]);
 
-/** Every recorded score for a match, hole order. */
 export const getScoreEntriesByMatch = async (
   matchId: string,
 ): Promise<ScoreEntry[]> =>
@@ -198,7 +205,6 @@ export const getScoreEntriesByMatch = async (
       .orderBy(score_entries.hole_number)
   ).map(toScoreEntry);
 
-/** Scores for a set of matches (used to score many matches in bulk). */
 export const getScoreEntriesByMatches = async (
   matchIds: string[],
 ): Promise<ScoreEntry[]> =>
@@ -212,7 +218,6 @@ export const getScoreEntriesByMatches = async (
       ).map(toScoreEntry)
     : [];
 
-/** The tournament's holes (par / stroke index / yardage), hole order. */
 export const getCourseHoles = async (
   tournamentId: string,
 ): Promise<CourseHole[]> =>
@@ -224,25 +229,19 @@ export const getCourseHoles = async (
       .orderBy(course_holes.hole_number)
   ).map(toCourseHole);
 
-// ---------------------------------------------------------------------------
-// Writes
-// ---------------------------------------------------------------------------
+// --- Writes ---
 
 export interface ScoreUpsert {
-  /** Exactly one of player_id / team_id is set (mirrors the DB XOR check). */
-  player_id: string | null;
+  player_id: string | null; // exactly one of player_id / team_id (DB XOR check)
   team_id: string | null;
   match_id: string;
   hole_number: number;
   strokes: number;
 }
 
-/**
- * Record (or correct) a score for a hole. A score belongs to *either* a player
- * (singles/four-ball) or a team/side (scramble/foursomes) — never both. Upserts
- * on the matching partial unique index so re-entry from the course overwrites
- * cleanly. Returns the persisted entry, or null if the insert produced no row.
- */
+// A score belongs to either a player (singles/four-ball) or a team
+// (scramble/foursomes), never both. Upserts on the matching partial unique
+// index so re-entering a hole overwrites cleanly.
 export const upsertScore = async (
   input: ScoreUpsert,
 ): Promise<ScoreEntry | null> => {
