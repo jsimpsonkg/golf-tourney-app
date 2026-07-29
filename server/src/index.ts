@@ -1,17 +1,6 @@
-import express from 'express';
-import cors from 'cors';
-import 'dotenv/config';
-import apiRouter from './routes/index';
+import app from './app';
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get("/", (request, response) => {
-  response.status(200).send("Golf Tournaments");
-});
-
-app.use('/api', apiRouter);
-
+// Local dev entry only (`npm run dev`). The deployed app has no long-lived
+// process — see `api/index.ts` at the repo root.
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`Server running on port ${port}`));
