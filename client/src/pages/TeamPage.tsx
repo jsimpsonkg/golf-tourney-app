@@ -10,6 +10,11 @@ import { useTeamPage } from "../api/tournaments";
 function toCardProps(match: RoundMatch, session: RoundSession, teamId: string) {
   const { result } = match;
 
+  const teamMembers = match.participants
+    .filter((p) => p.team_id === teamId)
+    .map((p) => p.player_name)
+    .join(" / ");
+
   const opponent = match.participants
     .filter((p) => p.team_id !== teamId)
     .map((p) => p.player_name)
@@ -39,6 +44,7 @@ function toCardProps(match: RoundMatch, session: RoundSession, teamId: string) {
   return {
     id: match.id,
     session: session.name ?? session.session_type ?? "Match",
+    teamMembers,
     opponent,
     result: outcome,
     statusLabel,

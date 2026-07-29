@@ -20,6 +20,7 @@ const resultLabels: Record<TeamMatchCardProps["result"], string> = {
 const TeamMatchCard = ({
   id,
   session,
+  teamMembers,
   opponent,
   result,
   statusLabel,
@@ -30,9 +31,14 @@ const TeamMatchCard = ({
       to={`/matches/${id}`}
       className="flex items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-fairway-900/5 transition hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="flex flex-col">
-        <span className="text-xs font-medium text-ink-muted">{session}</span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xs font-medium text-ink-muted mb-1">
+          {session}
+        </span>
         <span className="text-sm font-semibold text-fairway-800">
+          {teamMembers}
+        </span>
+        <span className="text-xs font-regular text-fairway-800">
           vs {opponent}
         </span>
       </div>

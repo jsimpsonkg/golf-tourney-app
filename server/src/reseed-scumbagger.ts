@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { db } from "./db/index";
 import {
+	tournaments,
+	course_holes,
 	teams,
 	players,
 	sessions,
@@ -15,6 +17,10 @@ import { eq } from "drizzle-orm";
 // two sessions: a 2v2 scramble (3 matches, 2 pts each) and singles (6 matches,
 // 1 pt each).
 const TID = "e23dc36a-661c-417b-868c-10450e6c0ea4";
+
+// Par for a stock 18-hole course (par 72), used only when the course hasn't
+// been laid out yet.
+const PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
 
 // Pairings are drawn from these lists in order.
 const TEAM1 = ["Simmer", "Ari", "Ryan Morrow", "Eric Kerbel", "Isaac Yitz", "Jared Gluck"];
@@ -78,6 +84,37 @@ const SINGLES_PLANS: MatchPlan[] = [
 
 async function reseed() {
 	await db.transaction(async (tx) => {
+		// The tournament row and its course are the fixture everything below
+		// hangs off, and this script only ever rebuilt the pieces underneath
+		// them. Create them when absent so a fresh database (a new Neon, say)
+		// works from one command instead of failing on the teams foreign key.
+		// Both are no-ops once they exist, so reruns don't disturb the course.
+		await tx
+			.insert(tournaments)
+			.values({
+				id: TID,
+				name: "Scumbagger Invitational",
+				format: "rydercup",
+				image_url: "/images/dolphins-logo.jpg",
+				start_date: new Date(),
+			})
+			.onConflictDoNothing();
+
+		const existingHoles = await tx
+			.select({ id: course_holes.id })
+			.from(course_holes)
+			.where(eq(course_holes.tournament_id, TID));
+		if (!existingHoles.length) {
+			await tx.insert(course_holes).values(
+				PARS.map((par, i) => ({
+					tournament_id: TID,
+					hole_number: i + 1,
+					par,
+					stroke_index: i + 1,
+				})),
+			);
+		}
+
 		// Wipe existing data (course_holes stay). Delete order matters: sessions
 		// cascade to matches/participants/scores, players to their own rows.
 		await tx.delete(sessions).where(eq(sessions.tournament_id, TID));
