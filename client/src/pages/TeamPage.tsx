@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import type { MatchState, RoundMatch, RoundSession } from "@golf/shared";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import TeamMatchCard from "../components/TeamMatchCard/TeamMatchCard";
 import type { Result } from "../components/TeamMatchCard/TeamMatchCard.types";
 import { Tabs } from "../components/Tabs";
 import { useTeamPage } from "../api/tournaments";
+import { useStickyTab } from "../hooks/useStickyTab";
 
 // Turn a round match into TeamMatchCard props, seen from teamId's side
 // (opponent is the other team, win/loss is relative to us).
@@ -62,6 +64,11 @@ const TeamPage = () => {
   const { id, teamId } = useParams<{ id: string; teamId: string }>();
   const navigate = useNavigate();
   const { data: teamInfo, isLoading, error } = useTeamPage(id, teamId);
+
+  const [, rememberTeam] = useStickyTab(`teams:${id}`);
+  useEffect(() => {
+    if (teamId) rememberTeam(teamId);
+  }, [teamId, rememberTeam]);
 
   if (isLoading) {
     return (

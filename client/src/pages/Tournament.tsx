@@ -1,9 +1,11 @@
 import { Link, useParams } from "react-router-dom";
 import { useTournament } from "../api/tournaments";
+import { useStickyTab } from "../hooks/useStickyTab";
 
 const Tournament = () => {
   const { id } = useParams<{ id: string }>();
   const { data: tournament, isLoading, error } = useTournament(id);
+  const [lastTeamId] = useStickyTab(`teams:${id}`);
 
   if (isLoading) {
     return (
@@ -36,6 +38,12 @@ const Tournament = () => {
     session: (typeof tournament.sessions)[number],
     teamId: string | undefined,
   ) => session.standings.find((s) => s.team_id === teamId)?.points ?? 0;
+
+  // Open the roster on the team you were last looking at, falling back to the
+  // first team when nothing is remembered (or it belongs to another tournament).
+  const rosterTeamId = tournament.teams.some((t) => t.id === lastTeamId)
+    ? lastTeamId
+    : tournament.teams[0].id;
 
   return (
     <div className="flex flex-col gap-8">
@@ -129,7 +137,7 @@ const Tournament = () => {
             Round-by-round leaderboard <span aria-hidden>→</span>
           </Link>
           <Link
-            to={`/tournaments/${id}/teams/${tournament.teams[0].id}`}
+            to={`/tournaments/${id}/teams/${rosterTeamId}`}
             className="flex items-center justify-between rounded-xl bg-white p-4 font-semibold text-fairway-800 shadow-sm ring-1 ring-fairway-900/5 transition hover:-translate-y-0.5 hover:shadow-md"
           >
             Teams &amp; rosters <span aria-hidden>→</span>

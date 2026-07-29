@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { RoundMatch } from "@golf/shared";
 import { Tabs } from "../components/Tabs";
@@ -8,11 +7,12 @@ import type {
   Side,
 } from "../components/MatchCard/MatchCard.types";
 import { useRounds } from "../api/tournaments";
+import { useStickyTab } from "../hooks/useStickyTab";
 
 const RoundLeaderboard = () => {
   const { id } = useParams<{ id: string }>();
   const { data: rounds, isLoading, error } = useRounds(id);
-  const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
+  const [activeRoundId, setActiveRoundId] = useStickyTab(`rounds:${id}`);
 
   if (isLoading) {
     return (
