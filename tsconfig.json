@@ -6,6 +6,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
+    // "preserve" means the emitted function keeps ESM syntax, so the root
+    // package.json MUST keep "type": "module" — otherwise the Vercel runtime
+    // loads /var/task/api/index.js as CommonJS and every request 500s with
+    // "Cannot use import statement outside a module". The two are a pair:
+    // change both or neither.
     "module": "preserve",
     "moduleResolution": "bundler",
     "types": ["node"],
