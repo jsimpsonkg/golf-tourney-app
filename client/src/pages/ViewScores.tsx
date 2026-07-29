@@ -1,42 +1,16 @@
-import type { MatchScorecard } from "@golf/shared";
 import { useParams } from "react-router-dom";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment } from "react";
 import { Link } from "react-router-dom";
 import Scorecard from "../components/Scorecard/Scorecard";
 import PlayerNames from "../components/PlayerNames";
+import { useMatchScorecard } from "../api/matches";
 
 const FRONT = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 const BACK = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 
 const ViewScores = () => {
-  const apiUrl = import.meta.env.VITE_API_URL;
   const { matchId } = useParams<{ matchId: string }>();
-
-  const [card, setCard] = useState<MatchScorecard>();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`${apiUrl}/api/matches/${matchId}/scores`);
-        if (!response.ok) {
-          throw new Error(`${response.status} ${response.statusText}`);
-        }
-        setCard((await response.json()) as MatchScorecard);
-      } catch (err) {
-        console.error(err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load scorecard",
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
-  }, [apiUrl, matchId]);
+  const { data: card, isLoading, error } = useMatchScorecard(matchId);
 
   if (isLoading) {
     return (
@@ -49,7 +23,9 @@ const ViewScores = () => {
   if (error || !card) {
     return (
       <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
-        {error ?? "Scorecard not found. Try going back to the home page."}
+        {error
+          ? error.message
+          : "Scorecard not found. Try going back to the home page."}
       </div>
     );
   }

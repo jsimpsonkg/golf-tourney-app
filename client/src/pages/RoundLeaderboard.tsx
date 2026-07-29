@@ -1,43 +1,18 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { RoundMatch, RoundsView } from "@golf/shared";
+import type { RoundMatch } from "@golf/shared";
 import { Tabs } from "../components/Tabs";
 import MatchCard from "../components/MatchCard/MatchCard";
 import type {
   LeaderboardMatchRow,
   Side,
 } from "../components/MatchCard/MatchCard.types";
+import { useRounds } from "../api/tournaments";
 
 const RoundLeaderboard = () => {
-  const apiUrl = import.meta.env.VITE_API_URL;
   const { id } = useParams<{ id: string }>();
-
-  const [rounds, setRounds] = useState<RoundsView>();
+  const { data: rounds, isLoading, error } = useRounds(id);
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`${apiUrl}/api/tournaments/${id}/rounds`);
-        if (!response.ok) {
-          throw new Error(`${response.status} ${response.statusText}`);
-        }
-        setRounds((await response.json()) as RoundsView);
-      } catch (err) {
-        console.error(err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load leaderboard",
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
-  }, [apiUrl, id]);
 
   if (isLoading) {
     return (
@@ -50,7 +25,9 @@ const RoundLeaderboard = () => {
   if (error || !rounds || rounds.sessions.length === 0) {
     return (
       <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
-        {error ?? "No rounds found. Try going back to the home page."}
+        {error
+          ? error.message
+          : "No rounds found. Try going back to the home page."}
       </div>
     );
   }

@@ -1,35 +1,16 @@
-import { useEffect, useState } from "react";
 import TournamentGrid from "../components/TournamentGrid/TournamentGrid";
 import type { TournamentCardProps } from "../components/TournamentCard";
-import type { Tournament as ApiTournement } from "@golf/shared";
+import { useTournaments } from "../api/tournaments";
 
 function Home() {
-  const [tournaments, setTournaments] = useState<TournamentCardProps[]>([]);
-  const apiUrl = import.meta.env.VITE_API_URL;
+  const { data: tournaments, isLoading, error } = useTournaments();
 
-  async function loadData() {
-    await fetch(`${apiUrl}/api/tournaments`)
-      .then((res) => res.json())
-      .then((body) => {
-        const normalizedTournements: TournamentCardProps[] = (
-          body as ApiTournement[]
-        ).map((t) => ({
-          id: t.id,
-          name: t.name,
-          img: { src: t.image_url ?? "" },
-          description: "Golf Tournement",
-        }));
-
-        setTournaments(normalizedTournements);
-      })
-      .catch((err) => {
-        console.log(err);
-      });
-  }
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const cards: TournamentCardProps[] = (tournaments ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    img: { src: t.image_url ?? "" },
+    description: "Golf Tournement",
+  }));
 
   return (
     <div className="flex flex-col gap-8">
@@ -45,7 +26,17 @@ function Home() {
         </p>
       </header>
 
-      <TournamentGrid tournaments={tournaments} />
+      {isLoading ? (
+        <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
+          Loading tournaments...
+        </div>
+      ) : error ? (
+        <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
+          {error.message}
+        </div>
+      ) : (
+        <TournamentGrid tournaments={cards} />
+      )}
     </div>
   );
 }
