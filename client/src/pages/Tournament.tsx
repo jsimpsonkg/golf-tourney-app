@@ -47,7 +47,7 @@ const Tournament = () => {
       </header>
 
       {/* Headline standings */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 -mt-2">
         <h2 className="font-bold text-fairway-700 text-2xl ml-2">Score</h2>
         <div className="grid grid-cols-2 gap-4">
           {tournament.teams.map((team) => (

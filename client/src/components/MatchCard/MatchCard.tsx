@@ -40,9 +40,11 @@ const MatchCard = ({
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        {/* max-w keeps the pairing stacked next to the status pill instead of
+            stretching a single line across the full card width. */}
         <PlayerNames
           names={players.A}
-          className={`block text-right text-sm ${
+          className={`ml-auto block max-w-[9rem] text-right text-sm ${
             leader === "A" ? "font-bold text-fairway-800" : "text-ink-muted"
           }`}
         />
@@ -51,7 +53,7 @@ const MatchCard = ({
         </span>
         <PlayerNames
           names={players.B}
-          className={`block text-left text-sm ${
+          className={`mr-auto block max-w-[9rem] text-left text-sm ${
             leader === "B" ? "font-bold text-fairway-800" : "text-ink-muted"
           }`}
         />

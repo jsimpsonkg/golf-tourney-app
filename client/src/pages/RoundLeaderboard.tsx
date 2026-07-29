@@ -58,6 +58,14 @@ const RoundLeaderboard = () => {
   const activeSession =
     rounds.sessions.find((s) => s.id === activeRoundId) ?? rounds.sessions[0];
 
+  // Header bubble shows the selected round's points, so it moves with the tabs.
+  const teamPoints = (teamId: string | undefined) =>
+    activeSession.standings.find((s) => s.team_id === teamId)?.points ?? 0;
+  const aPts = teamPoints(teamA?.id);
+  const bPts = teamPoints(teamB?.id);
+  const scoreStyles = (points: number, other: number) =>
+    points >= other ? "text-fairway-800" : "text-ink-muted";
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4">
@@ -71,9 +79,13 @@ const RoundLeaderboard = () => {
           <h1 className="text-3xl font-extrabold tracking-tight text-fairway-800">
             Leaderboard
           </h1>
-          <div className="flex items-center gap-3 text-lg font-bold text-fairway-800">
+          <div className="flex items-center gap-2.5 text-lg font-bold text-fairway-800">
             <span>{teamA?.name ?? "Team A"}</span>
-            <span className="text-ink-muted">vs</span>
+            <span className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-sm font-extrabold tabular-nums shadow-sm ring-1 ring-fairway-900/10">
+              <span className={scoreStyles(aPts, bPts)}>{aPts}</span>
+              <span className="font-medium text-ink-muted">–</span>
+              <span className={scoreStyles(bPts, aPts)}>{bPts}</span>
+            </span>
             <span>{teamB?.name ?? "Team B"}</span>
           </div>
         </div>
