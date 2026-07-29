@@ -1,0 +1,19 @@
+{
+  // Root config exists for one reason: Vercel compiles `api/index.ts` (and the
+  // server sources it pulls in) using the tsconfig.json at the project root.
+  // Without this it falls back to builder defaults, which is a moving target.
+  // The client and server keep their own configs and are unaffected.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["api"]
+}

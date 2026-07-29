@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-// ---------------------------------------------------------------------------
-// HARDCODED FIXTURE + LOCAL STATE ONLY — no persistence yet.
-// `PARS` / `PLAYERS` stand in for the match's CourseHoles + MatchParticipants.
-// `handleSave` should POST to `/api/matches/:id/scores` (endpoint already
-// exists) once wired; for now it just logs the hole's entries.
-// ---------------------------------------------------------------------------
-
+// TODO: hardcoded fixtures — swap for the match's CourseHoles + participants.
 const PARS = [4, 5, 4, 3, 4, 4, 5, 3, 4, 4, 4, 3, 5, 4, 4, 3, 4, 5];
 
 const PLAYERS = [
