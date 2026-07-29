@@ -16,7 +16,7 @@ const Tabs = ({ tabs, value, onChange, ariaLabel, className }: TabsProps) => {
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.value)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm whitespace-nowrap transition-colors ${
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm whitespace-nowrap transition-colors cursor-pointer ${
               isActive
                 ? "bg-white font-semibold text-fairway-800 shadow-sm"
                 : "font-medium text-ink-muted hover:text-fairway-700"

@@ -15,6 +15,13 @@
       "when": 1784497623349,
       "tag": "0001_chubby_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785007983620,
+      "tag": "0002_vengeful_revanche",
+      "breakpoints": true
     }
   ]
 }
