@@ -2,7 +2,6 @@
   "name": "golf-tourney-app",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "build": "npm run build --workspace client",
     "typecheck:api": "tsc -p tsconfig.json"
