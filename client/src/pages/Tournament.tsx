@@ -1,39 +1,9 @@
-import type { TournamentDetail } from "@golf/shared";
-import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useTournament } from "../api/tournaments";
 
 const Tournament = () => {
-  const apiUrl = import.meta.env.VITE_API_URL;
   const { id } = useParams<{ id: string }>();
-  const [tournament, setTournament] = useState<TournamentDetail>();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function loadData() {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${apiUrl}/api/tournaments/${id}`);
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
-      const body = await response.json();
-      const tournamentDetail = body as TournamentDetail;
-
-      setTournament(tournamentDetail);
-    } catch (err) {
-      console.error(err);
-      setError(
-        err instanceof Error ? err.message : "Failed to load tournament",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadData();
-  }, [id]);
+  const { data: tournament, isLoading, error } = useTournament(id);
 
   if (isLoading) {
     return (
@@ -46,7 +16,7 @@ const Tournament = () => {
   if (error || !tournament) {
     return (
       <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
-        {error ?? "Tournament not found."}
+        {error ? error.message : "Tournament not found."}
       </div>
     );
   }
