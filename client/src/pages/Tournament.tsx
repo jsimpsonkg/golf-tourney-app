@@ -47,24 +47,29 @@ const Tournament = () => {
       </header>
 
       {/* Headline standings */}
-      <div className="grid grid-cols-2 gap-4">
-        {tournament.teams.map((team) => (
-          <Link
-            key={team.name}
-            to={`/tournaments/${id}/teams/${team.id}`}
-            className={`flex flex-col items-center gap-1 rounded-2xl p-6 shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
-              team.id === leaderId
-                ? "bg-fairway-600 text-white ring-fairway-700"
-                : "bg-white text-fairway-800 ring-fairway-900/5"
-            }`}
-          >
-            <span className="text-sm font-medium opacity-80">{team.name}</span>
-            <span className="text-5xl font-extrabold tabular-nums">
-              {teamPoints(team.id)}
-            </span>
-            <span className="text-xs opacity-70">View team →</span>
-          </Link>
-        ))}
+      <div className="flex flex-col gap-2">
+        <h2 className="font-bold text-fairway-700 text-2xl ml-2">Score</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {tournament.teams.map((team) => (
+            <Link
+              key={team.name}
+              to={`/tournaments/${id}/teams/${team.id}`}
+              className={`flex flex-col items-center gap-1 rounded-2xl p-6 shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${
+                team.id === leaderId
+                  ? "bg-fairway-600 text-white ring-fairway-700"
+                  : "bg-white text-fairway-800 ring-fairway-900/5"
+              }`}
+            >
+              <span className="text-sm font-medium opacity-80">
+                {team.name}
+              </span>
+              <span className="text-5xl font-extrabold tabular-nums">
+                {teamPoints(team.id)}
+              </span>
+              <span className="text-xs opacity-70">View team →</span>
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Points by session */}
