@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import type { TeamMatchCardProps, Result } from "./TeamMatchCard.types";
-import type { MatchState } from "@golf/shared";
+import type { TeamMatchCardProps } from "./TeamMatchCard.types";
 
 const resultStyles: Record<TeamMatchCardProps["result"], string> = {
   win: "bg-fairway-100 text-fairway-700",
