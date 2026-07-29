@@ -7,8 +7,19 @@ import {
   getSessionInfo,
   getTeamsInfo,
 } from "./golf";
+import {
+  requirePassword,
+  getAccessStatus,
+  verifyPassword,
+} from "../middleware/requirePassword";
 
 const router = Router();
+
+// The only unauthenticated routes — everything below them needs the password.
+router.get("/access", getAccessStatus);
+router.post("/access", verifyPassword);
+
+router.use(requirePassword);
 
 router.get("/tournaments", getAllTournaments);
 router.get("/tournaments/:id", getTournamentById);

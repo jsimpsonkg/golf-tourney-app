@@ -1,14 +1,9 @@
-import type {
-  MatchState,
-  RoundMatch,
-  RoundSession,
-  TeamPageInfo,
-} from "@golf/shared";
-import { useEffect, useState } from "react";
+import type { MatchState, RoundMatch, RoundSession } from "@golf/shared";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import TeamMatchCard from "../components/TeamMatchCard/TeamMatchCard";
 import type { Result } from "../components/TeamMatchCard/TeamMatchCard.types";
 import { Tabs } from "../components/Tabs";
+import { useTeamPage } from "../api/tournaments";
 
 // Turn a round match into TeamMatchCard props, seen from teamId's side
 // (opponent is the other team, win/loss is relative to us).
@@ -58,41 +53,9 @@ const STATE_ORDER: Record<MatchState, number> = {
 };
 
 const TeamPage = () => {
-  const apiUrl = import.meta.env.VITE_API_URL;
   const { id, teamId } = useParams<{ id: string; teamId: string }>();
   const navigate = useNavigate();
-  const [teamInfo, setTeamInfo] = useState<TeamPageInfo>();
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function loadData() {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `${apiUrl}/api/tournaments/${id}/teams/${teamId}`,
-      );
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
-      const body = await response.json();
-      const teamInfo = body as TeamPageInfo;
-
-      setTeamInfo(teamInfo);
-    } catch (err) {
-      console.error(err);
-      setError(
-        err instanceof Error ? err.message : "Failed to load tournament",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadData();
-  }, [id, teamId]);
+  const { data: teamInfo, isLoading, error } = useTeamPage(id, teamId);
 
   if (isLoading) {
     return (
@@ -105,7 +68,7 @@ const TeamPage = () => {
   if (error || !teamInfo) {
     return (
       <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
-        {error ?? "Team Information not found."}
+        {error ? error.message : "Team Information not found."}
       </div>
     );
   }
