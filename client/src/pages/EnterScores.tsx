@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ScoreEntryInput } from "@golf/shared";
 import { useMatchScorecard, useSaveMatchScores } from "../api/matches";
+import { useStickyTab } from "../hooks/useStickyTab";
 import { relToPar, sumAt } from "../utils/scorecardUtils";
 
 type Edits = Record<string, Record<number, number | null>>;
@@ -11,7 +12,7 @@ const EnterScores = () => {
   const { data: card, isLoading, error } = useMatchScorecard(matchId);
   const save = useSaveMatchScores(matchId);
 
-  const [teamIdx, setTeamIdx] = useState(0);
+  const [activeTeamId, setActiveTeamId] = useStickyTab(`enterTeam:${matchId}`);
   const [edits, setEdits] = useState<Edits>({});
 
   if (isLoading) {
@@ -22,7 +23,8 @@ const EnterScores = () => {
     );
   }
 
-  const side = card?.sides[teamIdx] ?? card?.sides[0];
+  const side =
+    card?.sides.find((s) => s.team_id === activeTeamId) ?? card?.sides[0];
   if (error || !card || !side) {
     return (
       <div className="rounded-xl bg-white p-6 text-center text-ink-muted shadow-sm ring-1 ring-fairway-900/5">
@@ -49,7 +51,10 @@ const EnterScores = () => {
 
   const bump = (i: number, delta: number) => {
     const current = strokes[i];
-    setScore(i, current == null ? pars[i] : Math.min(20, Math.max(1, current + delta)));
+    setScore(
+      i,
+      current == null ? pars[i] : Math.min(20, Math.max(1, current + delta)),
+    );
   };
 
   const pending: ScoreEntryInput[] = card.sides.flatMap((s) =>
@@ -68,7 +73,10 @@ const EnterScores = () => {
   };
 
   const played = strokes.filter((s) => s != null).length;
-  const total = sumAt(strokes, pars.map((_, i) => i));
+  const total = sumAt(
+    strokes,
+    pars.map((_, i) => i),
+  );
   const toPar = relToPar(strokes, pars);
 
   const front = pars.map((_, i) => i).slice(0, 9);
@@ -76,9 +84,7 @@ const EnterScores = () => {
 
   const scoreBadge = (value: number | null, par: number) => {
     if (value == null)
-      return (
-        <span className="text-3xl font-bold text-ink-muted/30">–</span>
-      );
+      return <span className="text-3xl font-bold text-ink-muted/30">–</span>;
 
     const diff = value - par;
     const base =
@@ -192,7 +198,7 @@ const EnterScores = () => {
       <div className="flex items-center justify-between">
         <Link
           to={`/matches/${matchId}`}
-          className="text-sm font-semibold uppercase tracking-widest text-fairway-600 hover:text-fairway-700"
+          className="text-sm font-semibold text-fairway-600 hover:text-fairway-700"
         >
           ← Scorecard
         </Link>
@@ -204,11 +210,11 @@ const EnterScores = () => {
 
       {card.sides.length > 1 && (
         <div className="grid grid-cols-2 gap-1 rounded-xl bg-fairway-100 p-1">
-          {card.sides.map((s, i) => (
+          {card.sides.map((s) => (
             <button
               key={s.team_id}
               type="button"
-              onClick={() => setTeamIdx(i)}
+              onClick={() => setActiveTeamId(s.team_id)}
               className={`rounded-lg px-3 py-2 text-center transition-colors ${
                 s.team_id === side.team_id
                   ? "bg-white shadow-sm"
