@@ -169,8 +169,27 @@ export interface MatchScorecard {
   session_name: string | null;
   match_number: number | null;
   pars: number[];
+  hole_numbers: number[];
   sides: ScorecardSide[];
   result: MatchResult;
+}
+
+// --- Score entry (POST /api/matches/:id/scores) ---
+
+export interface ScoreEntryInput {
+  player_id?: string | null;
+  team_id?: string | null;
+  hole_number: number;
+  strokes: number | null;
+}
+
+export interface SaveScoresRequest {
+  entries: ScoreEntryInput[];
+}
+
+export interface SaveScoresResponse {
+  saved: ScoreEntry[];
+  deleted: number;
 }
 
 // --- Team page view ---

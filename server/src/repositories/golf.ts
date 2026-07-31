@@ -1,4 +1,4 @@
-import { eq, inArray, sql, and } from "drizzle-orm";
+import { eq, inArray, sql, and, or } from "drizzle-orm";
 import { db } from "../db/index";
 import {
   tournaments,
@@ -239,45 +239,69 @@ export interface ScoreUpsert {
   strokes: number;
 }
 
+export type ScoreKey = Omit<ScoreUpsert, "strokes">;
+
+export const upsertScores = async (
+  inputs: ScoreUpsert[],
+): Promise<ScoreEntry[]> => {
+  const byPlayer = inputs.filter((i) => i.player_id !== null);
+  const byTeam = inputs.filter((i) => i.player_id === null);
+
+  const run = async (rows: ScoreUpsert[], keyed: "player" | "team") => {
+    if (rows.length === 0) return [];
+    const column = keyed === "player" ? score_entries.player_id : score_entries.team_id;
+    const inserted = await db
+      .insert(score_entries)
+      .values(
+        rows.map((r) => ({
+          player_id: r.player_id,
+          team_id: r.team_id,
+          match_id: r.match_id,
+          hole_number: r.hole_number,
+          strokes: r.strokes,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [column, score_entries.match_id, score_entries.hole_number],
+        targetWhere: sql`${column} IS NOT NULL`,
+        set: { strokes: sql`excluded.strokes` },
+      })
+      .returning();
+    return inserted.map(toScoreEntry);
+  };
+
+  return [...(await run(byPlayer, "player")), ...(await run(byTeam, "team"))];
+};
+
 // A score belongs to either a player (singles/four-ball) or a team
 // (scramble/foursomes), never both. Upserts on the matching partial unique
 // index so re-entering a hole overwrites cleanly.
 export const upsertScore = async (
   input: ScoreUpsert,
 ): Promise<ScoreEntry | null> => {
-  const hasPlayer = input.player_id !== null;
+  const [row] = await upsertScores([input]);
+  return row ?? null;
+};
 
-  const conflict = hasPlayer
-    ? {
-        target: [
-          score_entries.player_id,
-          score_entries.match_id,
-          score_entries.hole_number,
-        ],
-        targetWhere: sql`${score_entries.player_id} IS NOT NULL`,
-        set: { strokes: input.strokes },
-      }
-    : {
-        target: [
-          score_entries.team_id,
-          score_entries.match_id,
-          score_entries.hole_number,
-        ],
-        targetWhere: sql`${score_entries.team_id} IS NOT NULL`,
-        set: { strokes: input.strokes },
-      };
+export const deleteScores = async (keys: ScoreKey[]): Promise<number> => {
+  if (keys.length === 0) return 0;
 
-  const [row] = await db
-    .insert(score_entries)
-    .values({
-      player_id: input.player_id,
-      team_id: input.team_id,
-      match_id: input.match_id,
-      hole_number: input.hole_number,
-      strokes: input.strokes,
-    })
-    .onConflictDoUpdate(conflict)
-    .returning();
+  const rows = await db
+    .delete(score_entries)
+    .where(
+      or(
+        ...keys.map((k) =>
+          and(
+            eq(score_entries.match_id, k.match_id),
+            eq(score_entries.hole_number, k.hole_number),
+            k.player_id !== null
+              ? eq(score_entries.player_id, k.player_id)
+              : eq(score_entries.team_id, k.team_id as string),
+          ),
+        ),
+      ),
+    )
+    .returning({ id: score_entries.id });
 
-  return row ? toScoreEntry(row) : null;
+  return rows.length;
 };

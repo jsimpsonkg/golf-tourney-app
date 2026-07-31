@@ -4,6 +4,7 @@ import type {
   MatchScorecard,
   MatchWithParticipants,
   RoundsView,
+  SaveScoresResponse,
   ScoreEntry,
   ScorecardSide,
   SessionWithMatches,
@@ -257,6 +258,7 @@ export const getMatchScores: Handler = async (req, res) => {
       session_name: session.name,
       match_number: match.match_number,
       pars,
+      hole_numbers: holes.map((h) => h.hole_number),
       sides: [...sideByTeam.values()],
       result,
     };
@@ -268,7 +270,10 @@ export const getMatchScores: Handler = async (req, res) => {
   }
 };
 
-// POST /api/matches/:id/scores — record or correct a hole's score.
+const MAX_HOLE_NUMBER = 36;
+const MAX_STROKES = 30;
+
+// POST /api/matches/:id/scores — record or correct scores.
 export const createMatchScore: Handler = async (req, res) => {
   try {
     const matchId = req.params.id;
@@ -276,39 +281,90 @@ export const createMatchScore: Handler = async (req, res) => {
       res.status(400).json({ error: "Invalid match id" });
       return;
     }
-    const { player_id, team_id, hole_number, strokes } = req.body ?? {};
 
-    if (typeof hole_number !== "number" || typeof strokes !== "number") {
-      res.status(400).json({
-        error: "hole_number (number) and strokes (number) are required",
-      });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const isBatch = Array.isArray(body.entries);
+    const raw = (isBatch ? body.entries : [body]) as unknown[];
+
+    if (raw.length === 0 || raw.length > MAX_HOLE_NUMBER * 2) {
+      res.status(400).json({ error: "entries must hold 1–72 scores" });
       return;
     }
 
-    // Need exactly one of player_id / team_id (matches the DB XOR check).
-    const hasPlayer = typeof player_id === "string";
-    const hasTeam = typeof team_id === "string";
-    if (hasPlayer === hasTeam) {
-      res.status(400).json({
-        error: "exactly one of player_id or team_id (string) is required",
-      });
+    const upserts: repo.ScoreUpsert[] = [];
+    const deletes: repo.ScoreKey[] = [];
+
+    for (const item of raw) {
+      const { player_id, team_id, hole_number, strokes } = (item ??
+        {}) as Record<string, unknown>;
+
+      if (
+        !Number.isInteger(hole_number) ||
+        (hole_number as number) < 1 ||
+        (hole_number as number) > MAX_HOLE_NUMBER
+      ) {
+        res
+          .status(400)
+          .json({ error: `hole_number must be an integer 1–${MAX_HOLE_NUMBER}` });
+        return;
+      }
+
+      const clearing = isBatch && strokes === null;
+      if (
+        !clearing &&
+        (!Number.isInteger(strokes) ||
+          (strokes as number) < 1 ||
+          (strokes as number) > MAX_STROKES)
+      ) {
+        res
+          .status(400)
+          .json({ error: `strokes must be an integer 1–${MAX_STROKES}` });
+        return;
+      }
+
+      // Need exactly one of player_id / team_id (matches the DB XOR check).
+      const hasPlayer = isUuid(player_id);
+      const hasTeam = isUuid(team_id);
+      if (hasPlayer === hasTeam) {
+        res.status(400).json({
+          error: "exactly one of player_id or team_id (uuid) is required",
+        });
+        return;
+      }
+
+      const key: repo.ScoreKey = {
+        player_id: hasPlayer ? (player_id as string) : null,
+        team_id: hasTeam ? (team_id as string) : null,
+        match_id: matchId,
+        hole_number: hole_number as number,
+      };
+
+      if (clearing) deletes.push(key);
+      else upserts.push({ ...key, strokes: strokes as number });
+    }
+
+    // The same hole twice in one batch would make ON CONFLICT fail outright.
+    const keyOf = (k: repo.ScoreKey) =>
+      `${k.player_id ?? k.team_id}:${k.hole_number}`;
+    const deduped = [...new Map(upserts.map((u) => [keyOf(u), u])).values()];
+
+    const [saved, deleted] = await Promise.all([
+      repo.upsertScores(deduped),
+      repo.deleteScores(deletes),
+    ]);
+
+    if (!isBatch) {
+      const entry = saved[0];
+      if (!entry) {
+        res.status(500).json({ error: "Failed to record score" });
+        return;
+      }
+      res.status(201).json(entry);
       return;
     }
 
-    const entry = await repo.upsertScore({
-      player_id: hasPlayer ? player_id : null,
-      team_id: hasTeam ? team_id : null,
-      match_id: matchId,
-      hole_number,
-      strokes,
-    });
-
-    if (!entry) {
-      res.status(500).json({ error: "Failed to record score" });
-      return;
-    }
-
-    res.status(201).json(entry);
+    const response: SaveScoresResponse = { saved, deleted };
+    res.status(200).json(response);
   } catch (err) {
     console.error("createMatchScore failed:", err);
     res.status(500).json({ error: "Internal server error" });
