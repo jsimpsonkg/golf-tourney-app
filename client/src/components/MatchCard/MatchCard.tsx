@@ -20,7 +20,7 @@ const MatchCard = ({
   matchNumber,
   players,
   state,
-  statusLabel,
+  statusLines,
   leader,
 }: LeaderboardMatchRow) => {
   return (
@@ -48,8 +48,24 @@ const MatchCard = ({
             leader === "A" ? "font-bold text-fairway-800" : "text-ink-muted"
           }`}
         />
-        <span className="rounded-md bg-fairway-50 px-2.5 py-1 text-center text-sm font-semibold text-fairway-700 whitespace-nowrap">
-          {statusLabel}
+        {/* One row per nine. The label column is fixed so "F9"/"B9" stay in a
+            straight line and the results align under each other. */}
+        <span className="flex flex-col gap-0.5 rounded-md bg-fairway-50 px-2.5 py-1 text-sm font-semibold text-fairway-700">
+          {statusLines.map((line, i) => (
+            <span
+              key={i}
+              className="flex items-baseline justify-center gap-1.5 whitespace-nowrap"
+            >
+              {line.label ? (
+                <span className="w-5 text-left text-xs font-bold text-fairway-500">
+                  {line.label}
+                </span>
+              ) : null}
+              <span className={line.label ? "flex-1 text-left" : ""}>
+                {line.value}
+              </span>
+            </span>
+          ))}
         </span>
         <PlayerNames
           names={players.B}

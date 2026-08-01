@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import Scorecard from "../components/Scorecard/Scorecard";
 import PlayerNames from "../components/PlayerNames";
 import { useMatchScorecard } from "../api/matches";
+import { formatPoints, pointsByTeam, toNineRows } from "../utils/nineStatus";
 
 const FRONT = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 const BACK = [9, 10, 11, 12, 13, 14, 15, 16, 17];
@@ -30,36 +31,39 @@ const ViewScores = () => {
     );
   }
 
-  // Show who's leading instead of a bare "3&2"; all-square has no leader
-  // and reads "Halved" once the match is done.
   const { result, sides } = card;
-  const leaderName = result.leading_team_id
-    ? (sides.find((s) => s.team_id === result.leading_team_id)?.team_name ??
-      null)
-    : null;
+  const teamName = (teamId: string | null) =>
+    teamId ? (sides.find((s) => s.team_id === teamId)?.team_name ?? null) : null;
 
-  // Each nine banks its own points, so a finished match is decided on the
-  // total. status_label already spells out both nines ("Front 9: 3&2 · Back
-  // 9: AS"); prefix it with who took the match overall.
-  const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
-  const ranked = [...(result.points ?? [])].sort((x, y) => y.points - x.points);
-  const [best, rest] = ranked;
+  // Each nine is its own contest, so report them on separate lines instead of
+  // one combined status. Name the leader rather than showing a bare "3&2".
+  const nineRows = toNineRows(result).map((n) => {
+    const leader = teamName(n.leadingTeamId);
+    let text: string;
+    if (n.state === "not_started") {
+      text = "Not started";
+    } else if (leader == null) {
+      text = n.state === "completed" ? "Halved" : n.status;
+    } else {
+      text =
+        n.state === "completed"
+          ? `${leader} wins ${n.status}`
+          : `${leader} · ${n.status}`;
+    }
+    return { label: n.label, text };
+  });
 
-  let status: string;
-  if (result.state === "not_started") {
-    status = "Not started";
-  } else if (result.state === "completed" && best && rest) {
-    const winnerName =
-      sides.find((s) => s.team_id === best.team_id)?.team_name ?? null;
-    status =
-      best.points === rest.points
-        ? `Halved ${fmt(best.points)}-${fmt(rest.points)} · ${result.status_label}`
-        : `${winnerName} wins ${fmt(best.points)}-${fmt(rest.points)} · ${result.status_label}`;
-  } else if (leaderName == null) {
-    status = `All square thru ${result.holes_played}`;
-  } else {
-    status = `${leaderName} · ${result.status_label}`;
-  }
+  // Match total across decided nines, e.g. "Ruven's team 2 - 0 Isaiah's team".
+  const totals = pointsByTeam(result);
+  const matchTotal =
+    result.points == null
+      ? null
+      : sides
+          .map(
+            (s) =>
+              `${s.team_name} ${formatPoints(totals.get(s.team_id ?? "") ?? 0)}`,
+          )
+          .join(" · ");
 
   return (
     <div className="flex flex-col gap-6">
@@ -114,9 +118,29 @@ const ViewScores = () => {
         <Scorecard label="Front 9" holes={FRONT} totalLabel="Out" card={card} />
         <Scorecard label="Back 9" holes={BACK} totalLabel="In" card={card} />
 
-        <div className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-fairway-900/5">
-          <span className="text-sm font-medium text-ink-muted">Status</span>
-          <span className="text-sm font-bold text-fairway-700">{status}</span>
+        {/* Each nine is worth its own point, so each gets its own status line. */}
+        <div className="flex flex-col divide-y divide-fairway-900/5 rounded-xl bg-white px-4 shadow-sm ring-1 ring-fairway-900/5">
+          {nineRows.map((n) => (
+            <div
+              key={n.label}
+              className="flex items-center justify-between gap-3 py-3"
+            >
+              <span className="text-sm font-medium text-ink-muted">
+                {n.label}
+              </span>
+              <span className="text-right text-sm font-bold text-fairway-700">
+                {n.text}
+              </span>
+            </div>
+          ))}
+          {matchTotal ? (
+            <div className="flex items-center justify-between gap-3 py-3">
+              <span className="text-sm font-medium text-ink-muted">Points</span>
+              <span className="text-right text-sm font-bold text-fairway-700">
+                {matchTotal}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

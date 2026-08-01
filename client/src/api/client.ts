@@ -58,4 +58,4 @@ export async function verifyPassword(password: string): Promise<boolean> {
 // Stands in for the never-wired Socket.io channel: for a handful of viewers,
 // refetching this often is indistinguishable from realtime.
 //export const LIVE_REFETCH_MS = 15_000;
-export const LIVE_REFETCH_MS = 15000_000;
+export const LIVE_REFETCH_MS = 15_000;

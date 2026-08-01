@@ -4,8 +4,10 @@ import { Tabs } from "../components/Tabs";
 import MatchCard from "../components/MatchCard/MatchCard";
 import type {
   LeaderboardMatchRow,
+  MatchStatusLine,
   Side,
 } from "../components/MatchCard/MatchCard.types";
+import { pointsByTeam, toNineRows } from "../utils/nineStatus";
 import { useRounds } from "../api/tournaments";
 import { useStickyTab } from "../hooks/useStickyTab";
 
@@ -44,46 +46,43 @@ const RoundLeaderboard = () => {
     }
     const { result } = match;
 
-    // The row is a narrow cell, so the engine's full two-clause label
-    // ("Front 9: 3&2 · Back 9: AS") is too long. Compact it: a finished match
-    // shows its points split, a live one shows just the nine in play.
-    const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
+    const totals = pointsByTeam(result);
     const pointsFor = (side: Side) =>
-      result.points
-        ?.filter((p) => sideOf(p.team_id) === side)
-        .reduce((n, p) => n + p.points, 0) ?? 0;
+      [...totals].reduce(
+        (n, [teamId, pts]) => (sideOf(teamId) === side ? n + pts : n),
+        0,
+      );
     const aPoints = pointsFor("A");
     const bPoints = pointsFor("B");
 
-    const active =
-      result.nines.find((n) => n.state === "in_progress") ??
-      [...result.nines].reverse().find((n) => n.holes_played > 0);
-    const shortNine = (label: string) =>
-      label === "Front 9" ? "F9" : label === "Back 9" ? "B9" : label;
+    // Front and back are separate contests, so give each its own line rather
+    // than cramming both into one pill.
+    const rows = toNineRows(result);
+    const statusLines: MatchStatusLine[] =
+      result.state === "not_started"
+        ? [{ label: null, value: "vs" }]
+        : rows.length > 1
+          ? rows.map((n) => ({ label: n.shortLabel, value: n.status }))
+          : rows.map((n) => ({ label: null, value: n.status }));
 
-    let statusLabel: string;
-    let leader: Side | null;
-    if (result.state === "not_started") {
-      statusLabel = "vs";
-      leader = null;
-    } else if (result.state === "completed") {
-      statusLabel = `${fmt(aPoints)} - ${fmt(bPoints)}`;
-      leader = aPoints === bPoints ? null : aPoints > bPoints ? "A" : "B";
-    } else {
-      statusLabel = active
-        ? result.nines.length > 1
-          ? `${shortNine(active.label)} ${active.status_label}`
-          : active.status_label
-        : result.status_label;
-      leader = result.leading_team_id ? sideOf(result.leading_team_id) : null;
-    }
+    // Highlight on the points total once done; on the live nine before that.
+    const leader: Side | null =
+      result.state === "completed"
+        ? aPoints === bPoints
+          ? null
+          : aPoints > bPoints
+            ? "A"
+            : "B"
+        : result.leading_team_id
+          ? sideOf(result.leading_team_id)
+          : null;
 
     return {
       matchId: match.id,
       matchNumber: match.match_number,
       players,
       state: result.state,
-      statusLabel,
+      statusLines,
       leader,
     };
   };
