@@ -45,13 +45,25 @@ const Tournament = () => {
     ? lastTeamId
     : tournament.teams[0].id;
 
+  // Venues, in round order. A tournament can span more than one course, so
+  // list whichever it actually plays rather than assuming a single home club.
+  const venues = [
+    ...new Set(
+      tournament.sessions
+        .map((s) => s.course_name)
+        .filter((name): name is string => !!name),
+    ),
+  ];
+
   return (
     <div className="flex flex-col gap-8">
       <header className="text-center">
         <h1 className="text-3xl font-extrabold tracking-tight text-fairway-800 sm:text-4xl">
           {tournament.name}
         </h1>
-        <p className="text-ink-muted mt-4 text-lg">Muskoka Highlands</p>
+        {venues.length > 0 ? (
+          <p className="text-ink-muted mt-4 text-lg">{venues.join(" · ")}</p>
+        ) : null}
       </header>
 
       {/* Headline standings */}

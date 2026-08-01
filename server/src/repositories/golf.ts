@@ -7,6 +7,7 @@ import {
   sessions,
   matches,
   match_participants,
+  courses,
   course_holes,
   score_entries,
 } from "../db/schema";
@@ -50,11 +51,18 @@ const toPlayer = (r: Row<typeof players>): Player => ({
   team_id: r.team_id,
 });
 
-const toSession = (r: Row<typeof sessions>): Session => ({
+// course_name rides along from a left join so callers can label a round with
+// its venue without a second query.
+const toSession = (
+  r: Row<typeof sessions>,
+  courseName: string | null = null,
+): Session => ({
   id: r.id,
   tournament_id: r.tournament_id,
   name: r.name,
   session_type: r.session_type,
+  course_id: r.course_id,
+  course_name: courseName,
   point_value: Number(r.point_value),
   sort_order: r.sort_order ?? 0,
 });
@@ -63,6 +71,8 @@ const toMatch = (r: Row<typeof matches>): Match => ({
   id: r.id,
   session_id: r.session_id,
   match_number: r.match_number,
+  match_type: r.match_type,
+  point_value: r.point_value === null ? null : Number(r.point_value),
   status: (r.status ?? "pending") as MatchDbStatus,
   started_at: r.started_at ? r.started_at.toISOString() : null,
 });
@@ -115,8 +125,12 @@ export const getMatch = async (id: string): Promise<Match | null> => {
 };
 
 export const getSession = async (id: string): Promise<Session | null> => {
-  const [row] = await db.select().from(sessions).where(eq(sessions.id, id));
-  return row ? toSession(row) : null;
+  const [row] = await db
+    .select({ session: sessions, course_name: courses.name })
+    .from(sessions)
+    .leftJoin(courses, eq(courses.id, sessions.course_id))
+    .where(eq(sessions.id, id));
+  return row ? toSession(row.session, row.course_name) : null;
 };
 
 export const getTeamsByTournament = async (
@@ -160,11 +174,12 @@ export const getSessionsByTournament = async (
 ): Promise<Session[]> =>
   (
     await db
-      .select()
+      .select({ session: sessions, course_name: courses.name })
       .from(sessions)
+      .leftJoin(courses, eq(courses.id, sessions.course_id))
       .where(eq(sessions.tournament_id, tournamentId))
       .orderBy(sessions.sort_order)
-  ).map(toSession);
+  ).map((r) => toSession(r.session, r.course_name));
 
 export const getMatchesBySessions = async (
   sessionIds: string[],
@@ -218,6 +233,9 @@ export const getScoreEntriesByMatches = async (
       ).map(toScoreEntry)
     : [];
 
+// Every hole belonging to a tournament, across all its courses. Callers that
+// need one round's layout should group these by course_id (see
+// ../services/courses) rather than assuming a single 18.
 export const getCourseHoles = async (
   tournamentId: string,
 ): Promise<CourseHole[]> =>
@@ -226,6 +244,17 @@ export const getCourseHoles = async (
       .select()
       .from(course_holes)
       .where(eq(course_holes.tournament_id, tournamentId))
+      .orderBy(course_holes.hole_number)
+  ).map(toCourseHole);
+
+export const getHolesByCourse = async (
+  courseId: string,
+): Promise<CourseHole[]> =>
+  (
+    await db
+      .select()
+      .from(course_holes)
+      .where(eq(course_holes.course_id, courseId))
       .orderBy(course_holes.hole_number)
   ).map(toCourseHole);
 

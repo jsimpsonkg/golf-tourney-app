@@ -18,6 +18,7 @@ import {
   type MatchScoringInput,
 } from "../services/scoring";
 import { buildRoundSessions, loadRoundData } from "../services/rounds";
+import { holesBySession } from "../services/courses";
 
 // Handlers only parse requests and assemble responses; the SQL lives in
 // ../repositories/golf.
@@ -92,6 +93,9 @@ export const getTournamentById: Handler = async (req, res) => {
     const pointValueBySession = new Map(
       sessions.map((s) => [s.id, s.point_value]),
     );
+    // Rounds can sit on different courses, so each match scores against its
+    // own session's layout rather than the tournament's whole hole list.
+    const sessionHoles = holesBySession(sessions, holes);
 
     // Group scoring inputs by session so per-session and overall standings
     // both come out of the same engine.
@@ -101,8 +105,8 @@ export const getTournamentById: Handler = async (req, res) => {
         match_id: m.id,
         participants: participantsByMatch.get(m.id) ?? [],
         scores: scoresByMatch.get(m.id) ?? [],
-        holes,
-        point_value: pointValueBySession.get(m.session_id) ?? 0,
+        holes: sessionHoles.get(m.session_id) ?? [],
+        point_value: m.point_value ?? pointValueBySession.get(m.session_id) ?? 0,
       };
       const list = inputsBySession.get(m.session_id) ?? [];
       list.push(input);
@@ -177,8 +181,8 @@ export const getSessionInfo: Handler = async (req, res) => {
 };
 
 // GET /api/matches/:id/scores — scorecard for one match: both sides with
-// pairing names, hole-by-hole strokes, and the course pars. Course holes hang
-// off the tournament, so we walk match → session → tournament to load them.
+// pairing names, hole-by-hole strokes, and the course pars. Holes hang off the
+// course a round is played on, so we walk match → session → course.
 export const getMatchScores: Handler = async (req, res) => {
   try {
     const id = req.params.id;
@@ -201,7 +205,11 @@ export const getMatchScores: Handler = async (req, res) => {
     const [participants, scores, holes, players, teams] = await Promise.all([
       repo.getParticipantsByMatch(id),
       repo.getScoreEntriesByMatch(id),
-      repo.getCourseHoles(session.tournament_id),
+      // A round without its own course falls back to the tournament's holes,
+      // which is the single-venue case.
+      session.course_id
+        ? repo.getHolesByCourse(session.course_id)
+        : repo.getCourseHoles(session.tournament_id),
       repo.getPlayersByTournament(session.tournament_id),
       repo.getTeamsByTournament(session.tournament_id),
     ]);
@@ -249,13 +257,14 @@ export const getMatchScores: Handler = async (req, res) => {
       participants,
       scores,
       holes,
-      point_value: session.point_value,
+      point_value: match.point_value ?? session.point_value,
     });
 
     const scorecard: MatchScorecard = {
       match_id: id,
       tournament_id: session.tournament_id,
       session_name: session.name,
+      course_name: session.course_name,
       match_number: match.match_number,
       pars,
       hole_numbers: holes.map((h) => h.hole_number),

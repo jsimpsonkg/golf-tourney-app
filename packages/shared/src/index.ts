@@ -30,6 +30,8 @@ export interface Session {
   tournament_id: string;
   name: string | null;
   session_type: string | null; // 'foursomes' | 'fourball' | 'singles' | ...
+  course_id: string | null; // the venue this round is played on
+  course_name: string | null; // denormalized for display; null when unnamed
   point_value: number; // points one match here is worth
   sort_order: number;
 }
@@ -40,6 +42,9 @@ export interface Match {
   id: string;
   session_id: string;
   match_number: number | null;
+  // Overrides for rounds that mix formats; null means inherit the session's.
+  match_type: string | null; // 'scramble' | 'singles' | ...
+  point_value: number | null;
   status: MatchDbStatus;
   started_at: string | null;
 }
@@ -59,7 +64,7 @@ export interface Course {
 export interface CourseHole {
   id: string;
   tournament_id: string;
-  course_id: string | null;
+  course_id: string; // holes always belong to a course
   hole_number: number;
   par: number;
   stroke_index: number | null;
@@ -120,8 +125,6 @@ export interface RoundsView {
   sessions: RoundSession[];
 }
 
-// --- Computed scoring shapes ---
-
 export type MatchState = "not_started" | "in_progress" | "completed";
 
 export interface MatchPoints {
@@ -167,6 +170,7 @@ export interface MatchScorecard {
   match_id: string;
   tournament_id: string;
   session_name: string | null;
+  course_name: string | null; // rounds can sit on different courses
   match_number: number | null;
   pars: number[];
   hole_numbers: number[];

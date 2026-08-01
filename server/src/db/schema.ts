@@ -47,6 +47,9 @@ export const sessions = pgTable("sessions", {
 		.notNull(),
 	name: text("name"),
 	session_type: text("session_type"), // e.g. 'foursomes', 'fourball', 'singles', 'scramble'
+	// Which course this round is played on. Nullable so a single-venue
+	// tournament can leave it unset and fall back to its only course.
+	course_id: uuid("course_id").references(() => courses.id),
 	// Points a single match in this session is worth (0.5 granularity for halved matches).
 	point_value: numeric("point_value", { precision: 4, scale: 2 }).default("1").notNull(),
 	sort_order: integer("sort_order").default(0),
@@ -59,6 +62,11 @@ export const matches = pgTable("matches", {
 		.notNull(),
 	match_number: integer("match_number"),
 	status: text("status").default("pending"), // 'pending' | 'in_progress' | 'completed'
+	// Per-match overrides, for a round that mixes formats — e.g. a day of two
+	// 2v2 matches worth 2 points plus one singles worth 1 is still one session
+	// (one tab in the UI). Null on either means "inherit from the session".
+	match_type: text("match_type"),
+	point_value: numeric("point_value", { precision: 4, scale: 2 }),
 	started_at: timestamp("started_at", { withTimezone: true }),
 });
 
@@ -99,13 +107,20 @@ export const course_holes = pgTable(
 		tournament_id: uuid("tournament_id")
 			.references(() => tournaments.id, { onDelete: "cascade" })
 			.notNull(),
-		course_id: uuid("course_id").references(() => courses.id),
+		// Holes belong to a course, not a tournament — that's what lets one
+		// tournament play two different venues across its rounds.
+		course_id: uuid("course_id")
+			.references(() => courses.id, { onDelete: "cascade" })
+			.notNull(),
 		hole_number: integer("hole_number").notNull(),
 		par: integer("par").notNull(),
 		stroke_index: integer("stroke_index"), // hole difficulty ranking, for net/handicap play
 		yardage: integer("yardage"),
 	},
-	(t) => [uniqueIndex("course_holes_tournament_hole_unq").on(t.tournament_id, t.hole_number)],
+	(t) => [
+		uniqueIndex("course_holes_course_hole_unq").on(t.course_id, t.hole_number),
+		index("course_holes_tournament_idx").on(t.tournament_id),
+	],
 );
 
 export const score_entries = pgTable(

@@ -99,6 +99,13 @@ const RoundLeaderboard = () => {
           value={activeSession.id}
           onChange={setActiveRoundId}
         />
+
+        {/* Rounds can be at different courses, so name the one in view. */}
+        {activeSession.course_name ? (
+          <p className="self-center text-sm text-ink-muted">
+            {activeSession.course_name}
+          </p>
+        ) : null}
       </header>
 
       <ul className="flex flex-col gap-3">

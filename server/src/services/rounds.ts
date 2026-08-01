@@ -14,6 +14,7 @@ import type {
   TeamStanding,
 } from "@golf/shared";
 import * as repo from "../repositories/golf";
+import { holesBySession } from "./courses";
 import {
   computeLeaderboard,
   computeMatchResult,
@@ -39,7 +40,8 @@ export interface RoundData {
   teams: Team[];
   players: Player[];
   sessions: Session[];
-  holes: CourseHole[];
+  holes: CourseHole[]; // every course's holes; group per session via holesBySession
+  holesBySession: Map<string, CourseHole[]>;
   matches: RoundMatch[];
   matchesBySession: Map<string, RoundMatch[]>;
   inputsBySession: Map<string, MatchScoringInput[]>; // for standings rollups
@@ -78,6 +80,9 @@ export const loadRoundData = async (
   const pointValueBySession = new Map(
     sessions.map((s) => [s.id, s.point_value]),
   );
+  // Each round is scored against its own course, so a 71-par venue and a
+  // 69-par one in the same tournament both compute correctly.
+  const sessionHoles = holesBySession(sessions, holes);
 
   const matches: RoundMatch[] = [];
   const matchesBySession = new Map<string, RoundMatch[]>();
@@ -89,8 +94,8 @@ export const loadRoundData = async (
       match_id: m.id,
       participants: matchParticipants,
       scores: scoresByMatch.get(m.id) ?? [],
-      holes,
-      point_value: pointValueBySession.get(m.session_id) ?? 0,
+      holes: sessionHoles.get(m.session_id) ?? [],
+      point_value: m.point_value ?? pointValueBySession.get(m.session_id) ?? 0,
     };
     const roundMatch: RoundMatch = {
       ...m,
@@ -121,6 +126,7 @@ export const loadRoundData = async (
     players,
     sessions,
     holes,
+    holesBySession: sessionHoles,
     matches,
     matchesBySession,
     inputsBySession,

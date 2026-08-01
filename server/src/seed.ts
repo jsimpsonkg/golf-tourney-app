@@ -7,6 +7,7 @@ import {
   sessions,
   matches,
   match_participants,
+  courses,
   course_holes,
   score_entries,
 } from "./db/schema";
@@ -65,9 +66,13 @@ async function seed() {
   }
 
   // Course holes 1..18.
+  const course = must(
+    await db.insert(courses).values({ name: "Test Course" }).returning(),
+  );
   await db.insert(course_holes).values(
     PARS.map((par, i) => ({
       tournament_id: tournament.id,
+      course_id: course.id,
       hole_number: i + 1,
       par,
       stroke_index: i + 1,
@@ -82,6 +87,7 @@ async function seed() {
         tournament_id: tournament.id,
         name: "Singles",
         session_type: "singles",
+        course_id: course.id,
         point_value: "1",
         sort_order: 1,
       })

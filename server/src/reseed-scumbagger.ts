@@ -2,6 +2,7 @@ import "dotenv/config";
 import { db } from "./db/index";
 import {
 	tournaments,
+	courses,
 	course_holes,
 	teams,
 	players,
@@ -100,14 +101,22 @@ async function reseed() {
 			})
 			.onConflictDoNothing();
 
+		// Holes belong to a course now. Reuse the one the existing holes point
+		// at so a rerun doesn't strand them behind a second, empty course.
 		const existingHoles = await tx
-			.select({ id: course_holes.id })
+			.select({ course_id: course_holes.course_id })
 			.from(course_holes)
 			.where(eq(course_holes.tournament_id, TID));
-		if (!existingHoles.length) {
+
+		let courseId = existingHoles[0]?.course_id;
+		if (!courseId) {
+			courseId = must(
+				await tx.insert(courses).values({ name: "Muskoka Highlands" }).returning(),
+			).id;
 			await tx.insert(course_holes).values(
 				PARS.map((par, i) => ({
 					tournament_id: TID,
+					course_id: courseId!,
 					hole_number: i + 1,
 					par,
 					stroke_index: i + 1,
@@ -148,6 +157,7 @@ async function reseed() {
 					tournament_id: TID,
 					name: "2v2 Scramble",
 					session_type: "scramble",
+					course_id: courseId,
 					point_value: "2",
 					sort_order: 1,
 				})
@@ -198,6 +208,7 @@ async function reseed() {
 					tournament_id: TID,
 					name: "Singles",
 					session_type: "singles",
+					course_id: courseId,
 					point_value: "1",
 					sort_order: 2,
 				})

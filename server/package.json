@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "seed": "tsx src/seed.ts",
     "reseed": "tsx src/reseed-scumbagger.ts",
+    "seed:beber": "tsx src/seed-beber.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
