@@ -38,16 +38,28 @@ const ViewScores = () => {
       null)
     : null;
 
-  const status =
-    result.state === "not_started"
-      ? "Not started"
-      : leaderName == null
-        ? result.state === "completed"
-          ? "Halved"
-          : `All square thru ${result.holes_played}`
-        : result.state === "completed"
-          ? `${leaderName} wins ${result.status_label}`
-          : `${leaderName} · ${result.status_label}`;
+  // Each nine banks its own points, so a finished match is decided on the
+  // total. status_label already spells out both nines ("Front 9: 3&2 · Back
+  // 9: AS"); prefix it with who took the match overall.
+  const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
+  const ranked = [...(result.points ?? [])].sort((x, y) => y.points - x.points);
+  const [best, rest] = ranked;
+
+  let status: string;
+  if (result.state === "not_started") {
+    status = "Not started";
+  } else if (result.state === "completed" && best && rest) {
+    const winnerName =
+      sides.find((s) => s.team_id === best.team_id)?.team_name ?? null;
+    status =
+      best.points === rest.points
+        ? `Halved ${fmt(best.points)}-${fmt(rest.points)} · ${result.status_label}`
+        : `${winnerName} wins ${fmt(best.points)}-${fmt(rest.points)} · ${result.status_label}`;
+  } else if (leaderName == null) {
+    status = `All square thru ${result.holes_played}`;
+  } else {
+    status = `${leaderName} · ${result.status_label}`;
+  }
 
   return (
     <div className="flex flex-col gap-6">

@@ -1,14 +1,20 @@
 // Pure match-play scoring. No DB or HTTP — callers load the rows and pass them
 // in, which keeps this easy to test.
+//
+// A match is scored as two independent nines. Each nine is worth half the
+// match's point_value, so a match worth 2 pays 1 for the front and 1 for the
+// back, and a nine that finishes level splits its half.
 import type {
   CourseHole,
   MatchParticipant,
   MatchResult,
+  NineResult,
   ScoreEntry,
   Session,
   Team,
   LeaderboardView,
   MatchPoints,
+  MatchState,
   TeamStanding,
 } from "@golf/shared";
 
@@ -19,6 +25,84 @@ export interface MatchScoringInput {
   holes: CourseHole[];
   point_value: number; // what this match is worth, from its session
 }
+
+const HOLES_PER_NINE = 9;
+
+// Score one segment of holes as a self-contained match-play contest.
+// `a` / `b` are per-hole strokes for the segment; null = not played yet.
+const scoreNine = (
+  label: string,
+  a: (number | null)[],
+  b: (number | null)[],
+  teamAId: string,
+  teamBId: string,
+  point_value: number,
+): NineResult => {
+  // Walk holes both sides finished. net is signed: + means A is up, - means B.
+  let net = 0;
+  let holesPlayed = 0;
+  for (let i = 0; i < a.length; i++) {
+    const sa = a[i];
+    const sb = b[i];
+    if (sa == null || sb == null) continue;
+    holesPlayed++;
+    if (sa < sb) net++;
+    else if (sb < sa) net--;
+  }
+
+  const lead = Math.abs(net);
+  const holesRemaining = a.length - holesPlayed;
+  const allPlayed = holesRemaining === 0;
+  // A nine ends once the lead can't be caught (the "3&2" case); level after
+  // the last hole is a halve.
+  const decided = holesPlayed > 0 && lead > holesRemaining;
+  const completed = decided || (holesPlayed > 0 && allPlayed);
+
+  const state: MatchState =
+    holesPlayed === 0 ? "not_started" : completed ? "completed" : "in_progress";
+
+  const leadingTeamId = net > 0 ? teamAId : net < 0 ? teamBId : null;
+
+  let statusLabel: string;
+  if (holesPlayed === 0) {
+    statusLabel = "Not started";
+  } else if (completed) {
+    if (net === 0) statusLabel = "AS";
+    else if (allPlayed) statusLabel = `${lead} up`;
+    else statusLabel = `${lead}&${holesRemaining}`;
+  } else {
+    statusLabel =
+      net === 0 ? `AS thru ${holesPlayed}` : `${lead} up thru ${holesPlayed}`;
+  }
+
+  let points: MatchPoints[] | null = null;
+  if (completed) {
+    if (net === 0) {
+      // Halved — split this nine's points.
+      points = [
+        { team_id: teamAId, points: point_value / 2 },
+        { team_id: teamBId, points: point_value / 2 },
+      ];
+    } else {
+      const winner = net > 0 ? teamAId : teamBId;
+      const loser = net > 0 ? teamBId : teamAId;
+      points = [
+        { team_id: winner, points: point_value },
+        { team_id: loser, points: 0 },
+      ];
+    }
+  }
+
+  return {
+    label,
+    state,
+    leading_team_id: leadingTeamId,
+    holes_up: lead,
+    holes_played: holesPlayed,
+    status_label: statusLabel,
+    points,
+  };
+};
 
 export const computeMatchResult = ({
   match_id,
@@ -67,71 +151,98 @@ export const computeMatchResult = ({
       holes_played: 0,
       status_label: "Not started",
       points: null,
+      nines: [],
+      total_holes_played: 0,
     };
   }
 
-  // Walk holes both sides finished. net is signed: + means A is up, - means B.
-  let net = 0;
-  let holesPlayed = 0;
-  for (let i = 0; i < holes.length; i++) {
-    const sa = a[i];
-    const sb = b[i];
-    if (sa == null || sb == null) continue;
-    holesPlayed++;
-    if (sa < sb) net++;
-    else if (sb < sa) net--;
+  // Split into nines. An 18-hole card gives Front/Back; a 9-hole card gives a
+  // single segment that takes the whole point value, and any odd remainder
+  // (a 27-hole day) becomes its own segment rather than being dropped.
+  const segmentCount = Math.max(1, Math.ceil(holes.length / HOLES_PER_NINE));
+  const pointsPerNine = point_value / segmentCount;
+
+  const nines: NineResult[] = [];
+  for (let seg = 0; seg < segmentCount; seg++) {
+    const start = seg * HOLES_PER_NINE;
+    const end = Math.min(start + HOLES_PER_NINE, holes.length);
+    const label =
+      segmentCount === 1
+        ? "Match"
+        : seg === 0
+          ? "Front 9"
+          : seg === 1
+            ? "Back 9"
+            : `Holes ${start + 1}-${end}`;
+    nines.push(
+      scoreNine(
+        label,
+        a.slice(start, end),
+        b.slice(start, end),
+        teamAId,
+        teamBId,
+        pointsPerNine,
+      ),
+    );
   }
 
-  const lead = Math.abs(net);
-  const holesRemaining = holes.length - holesPlayed;
-  const allPlayed = holesRemaining === 0;
-  // A match ends once the lead can't be caught (the "3&2" case); level after
-  // the last hole is a halve.
-  const decided = holesPlayed > 0 && lead > holesRemaining;
-  const completed = decided || (holesPlayed > 0 && allPlayed);
+  const totalHolesPlayed = nines.reduce((n, x) => n + x.holes_played, 0);
 
-  const state: MatchResult["state"] =
-    holesPlayed === 0 ? "not_started" : completed ? "completed" : "in_progress";
+  // Overall state: completed only once every nine is done.
+  const state: MatchState =
+    totalHolesPlayed === 0
+      ? "not_started"
+      : nines.every((n) => n.state === "completed")
+        ? "completed"
+        : "in_progress";
 
-  const leadingTeamId = net > 0 ? teamAId : net < 0 ? teamBId : null;
+  // Bank points from every decided nine, even mid-match.
+  const banked = new Map<string, number>();
+  let anyDecided = false;
+  for (const n of nines) {
+    if (!n.points) continue;
+    anyDecided = true;
+    for (const p of n.points) {
+      banked.set(p.team_id, (banked.get(p.team_id) ?? 0) + p.points);
+    }
+  }
+  const points: MatchPoints[] | null = anyDecided
+    ? [teamAId, teamBId].map((team_id) => ({
+        team_id,
+        points: banked.get(team_id) ?? 0,
+      }))
+    : null;
+
+  // The "active" nine drives the headline status: the one in progress, else the
+  // last one with holes played, else the first.
+  // `nines` always has at least one segment, so this is never undefined.
+  const active: NineResult =
+    nines.find((n) => n.state === "in_progress") ??
+    [...nines].reverse().find((n) => n.holes_played > 0) ??
+    nines[0]!;
 
   let statusLabel: string;
-  if (holesPlayed === 0) {
+  if (state === "not_started") {
     statusLabel = "Not started";
-  } else if (completed) {
-    if (net === 0) statusLabel = "AS";
-    else if (allPlayed) statusLabel = `${lead} up`;
-    else statusLabel = `${lead}&${holesRemaining}`;
+  } else if (segmentCount === 1) {
+    statusLabel = active.status_label;
+  } else if (state === "completed") {
+    // Both nines done — report the split, e.g. "Front 9: 3&2 · Back 9: AS".
+    statusLabel = nines.map((n) => `${n.label}: ${n.status_label}`).join(" · ");
   } else {
-    statusLabel = net === 0 ? `AS thru ${holesPlayed}` : `${lead} up thru ${holesPlayed}`;
-  }
-
-  let points: MatchPoints[] | null = null;
-  if (completed) {
-    if (net === 0) {
-      // Halved — split the points.
-      points = [
-        { team_id: teamAId, points: point_value / 2 },
-        { team_id: teamBId, points: point_value / 2 },
-      ];
-    } else {
-      const winner = net > 0 ? teamAId : teamBId;
-      const loser = net > 0 ? teamBId : teamAId;
-      points = [
-        { team_id: winner, points: point_value },
-        { team_id: loser, points: 0 },
-      ];
-    }
+    statusLabel = `${active.label}: ${active.status_label}`;
   }
 
   return {
     match_id,
     state,
-    leading_team_id: leadingTeamId,
-    holes_up: lead,
-    holes_played: holesPlayed,
+    leading_team_id: active.leading_team_id,
+    holes_up: active.holes_up,
+    holes_played: active.holes_played,
     status_label: statusLabel,
     points,
+    nines,
+    total_holes_played: totalHolesPlayed,
   };
 };
 

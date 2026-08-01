@@ -43,15 +43,48 @@ const RoundLeaderboard = () => {
       players[sideOf(p.team_id)].push(p.player_name);
     }
     const { result } = match;
+
+    // The row is a narrow cell, so the engine's full two-clause label
+    // ("Front 9: 3&2 · Back 9: AS") is too long. Compact it: a finished match
+    // shows its points split, a live one shows just the nine in play.
+    const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
+    const pointsFor = (side: Side) =>
+      result.points
+        ?.filter((p) => sideOf(p.team_id) === side)
+        .reduce((n, p) => n + p.points, 0) ?? 0;
+    const aPoints = pointsFor("A");
+    const bPoints = pointsFor("B");
+
+    const active =
+      result.nines.find((n) => n.state === "in_progress") ??
+      [...result.nines].reverse().find((n) => n.holes_played > 0);
+    const shortNine = (label: string) =>
+      label === "Front 9" ? "F9" : label === "Back 9" ? "B9" : label;
+
+    let statusLabel: string;
+    let leader: Side | null;
+    if (result.state === "not_started") {
+      statusLabel = "vs";
+      leader = null;
+    } else if (result.state === "completed") {
+      statusLabel = `${fmt(aPoints)} - ${fmt(bPoints)}`;
+      leader = aPoints === bPoints ? null : aPoints > bPoints ? "A" : "B";
+    } else {
+      statusLabel = active
+        ? result.nines.length > 1
+          ? `${shortNine(active.label)} ${active.status_label}`
+          : active.status_label
+        : result.status_label;
+      leader = result.leading_team_id ? sideOf(result.leading_team_id) : null;
+    }
+
     return {
       matchId: match.id,
       matchNumber: match.match_number,
       players,
       state: result.state,
-      // Keep the "vs" placeholder before play begins; otherwise show the
-      // engine's match-play status ("3&2", "2 up thru 14", "AS").
-      statusLabel: result.state === "not_started" ? "vs" : result.status_label,
-      leader: result.leading_team_id ? sideOf(result.leading_team_id) : null,
+      statusLabel,
+      leader,
     };
   };
 

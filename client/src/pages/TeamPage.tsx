@@ -22,26 +22,45 @@ function toCardProps(match: RoundMatch, session: RoundSession, teamId: string) {
     .map((p) => p.player_name)
     .join(" / ");
 
+  // Each nine banks its own points, so a completed match is won on the points
+  // total, not on who led the last nine — split 1-1 reads as halved.
+  const pointsFor = (id: string) =>
+    result.points?.find((p) => p.team_id === id)?.points ?? 0;
+  const ours = pointsFor(teamId);
+  const theirs =
+    result.points
+      ?.filter((p) => p.team_id !== teamId)
+      .reduce((n, p) => n + p.points, 0) ?? 0;
+
   let outcome: Result;
   if (result.state === "not_started") {
     outcome = "upcoming";
   } else if (result.state === "in_progress") {
     outcome = "live";
-  } else if (result.leading_team_id === null) {
+  } else if (ours === theirs) {
     outcome = "halved";
-  } else if (result.leading_team_id === teamId) {
+  } else if (ours > theirs) {
     outcome = "win";
   } else {
     outcome = "loss";
   }
 
-  // status_label reads from the leader's side ("2 up thru 3"), so flip "up" to
-  // "down" when we're the trailing team. "AS" and "3&2" don't need it.
-  const trailing =
-    result.leading_team_id !== null && result.leading_team_id !== teamId;
-  const statusLabel = trailing
-    ? result.status_label.replace(" up", " down")
-    : result.status_label;
+  // A completed match's label lists both nines ("Front 9: 3&2 · Back 9: AS"),
+  // and each nine can belong to a different side — there's no single team to
+  // flip "up"/"down" against. Report the points split instead, from our side.
+  const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
+  let statusLabel: string;
+  if (result.state === "completed") {
+    const verb = ours === theirs ? "Halved" : ours > theirs ? "Won" : "Lost";
+    statusLabel = `${verb} ${fmt(ours)}-${fmt(theirs)}`;
+  } else {
+    // In progress: a single clause from the leader's side, so the flip is safe.
+    const trailing =
+      result.leading_team_id !== null && result.leading_team_id !== teamId;
+    statusLabel = trailing
+      ? result.status_label.replace(" up", " down")
+      : result.status_label;
+  }
 
   return {
     id: match.id,

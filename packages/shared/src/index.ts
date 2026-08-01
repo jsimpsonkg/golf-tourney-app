@@ -132,14 +132,32 @@ export interface MatchPoints {
   points: number;
 }
 
-export interface MatchResult {
-  match_id: string;
+// A match is scored as two independent nines, each worth half the match's
+// point_value — win the front, win the back, and they bank separately.
+export interface NineResult {
+  label: string; // "Front 9" | "Back 9"
   state: MatchState;
   leading_team_id: string | null; // null when all-square
   holes_up: number;
   holes_played: number;
+  status_label: string; // "3&2", "2 up", "AS", "1 up thru 5", ...
+  points: MatchPoints[] | null; // null until this nine is decided
+}
+
+export interface MatchResult {
+  match_id: string;
+  state: MatchState;
+  // These four describe the *active* nine (the one currently being played, or
+  // the last one played) so live status reads naturally. Use `nines` for detail.
+  leading_team_id: string | null; // null when all-square
+  holes_up: number;
+  holes_played: number; // holes played in the active nine
   status_label: string; // "3&2", "2 up", "AS", "1 up thru 14", ...
-  points: MatchPoints[] | null; // null while in progress
+  // Points banked so far, summed across decided nines. Null until a nine is
+  // decided — so a match can carry points while still in progress.
+  points: MatchPoints[] | null;
+  nines: NineResult[];
+  total_holes_played: number; // across the whole match
 }
 
 export interface TeamStanding {
